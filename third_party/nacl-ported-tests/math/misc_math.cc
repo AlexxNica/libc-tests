@@ -7,23 +7,46 @@
 /*
  * Test basic floating point operations
  */
-#include <assert.h>
+#include "gtest/gtest.h"
 #include <math.h>
-#include <stdio.h>
 
 #define NUM_ARRAY_ELEMENTS 3
 
-float Numbers1[NUM_ARRAY_ELEMENTS] = {0.5, 0.3, 0.2};
+namespace {
+
+class MiscMathTests : public ::testing::Test {
+ protected:
+  volatile int dummy;
+  float Numbers1[NUM_ARRAY_ELEMENTS] = {0.5, 0.3, 0.2};
+
+  MiscMathTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~MiscMathTests() override {
+  }
 
 
-int main(int argc, char* argv[]) {
+  void SetUp() override {
+    dummy = 10;
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+TEST_F(MiscMathTests, MiscMath) {
   int i;
   float sum;
 
   /* This will not happen but helps confusing the optimizer */
-  if (argc > 1000) {
+  if (dummy > 1000) {
     for (i = 0; i < NUM_ARRAY_ELEMENTS; ++i) {
-      Numbers1[i] = (float) argv[i][0];
+      Numbers1[i] = (float) dummy;
     }
   }
 
@@ -33,6 +56,5 @@ int main(int argc, char* argv[]) {
     sum += Numbers1[i];
   }
 
-  assert (fabs (sum - 1.) < 0.001);
-  return 0;
+  ASSERT_LT(fabs (sum - 1.), 0.001);
 }
