@@ -10,3 +10,12 @@ source_set("small_tests") {
     "//third_party/gtest",
   ]
 }
+
+source_set("small_tests_broken") {
+  sources = [
+    "mem_test.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}

@@ -18,6 +18,7 @@ executable("libc-tests-broken") {
     "main.cc",
   ]
   deps = [
+    "third_party/nacl-ported-tests/syscalls:small_tests_broken",
     "//third_party/gtest",
   ]
 }
