@@ -2,19 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-executable("libc-tests") {
+source_set("small_tests") {
   sources = [
-    "main.cc",
-  ]
-  deps = [
-    "third_party/nacl-ported-tests/syscalls:small_tests",
-    "//third_party/gtest",
-  ]
-}
-
-executable("libc-tests-broken") {
-  sources = [
-    "main.cc",
+    "getpid_test.cc",
   ]
   deps = [
     "//third_party/gtest",
