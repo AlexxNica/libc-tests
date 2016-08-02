@@ -14,8 +14,31 @@
 
 #include <cstdlib>
 #include <limits>
+#include "gtest/gtest.h"
 
-#include "native_client/tests/syscalls/test.h"
+namespace {
+
+class SemaphoreTests : public ::testing::Test {
+ protected:
+
+  SemaphoreTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~SemaphoreTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
 
 // Test error conditions of sem_init and return the number of failed checks.
 //
@@ -31,13 +54,12 @@
 //        ENOSYS pshared is non-zero, but the system does  not  support
 //               process-shared semaphores (see sem_overview(7)).
 // ===================================
-// However, pshared is not supported in NaCl currently, so a non-zero pshared
+// pshared is not supported in fuchsia, so a non-zero pshared
 // value should yield an error (EINVAL).
-int TestSemInitErrors() {
-  START_TEST("sem_init error conditions");
+TEST_F(SemaphoreTests, TestSemInitErrors) {
   // First, make sure that it is possible to exceed SEM_VALUE_MAX
   // for this test, otherwise we can't cause this failure mode.
-  EXPECT(SEM_VALUE_MAX < std::numeric_limits<unsigned int>::max());
+  EXPECT_LT((const unsigned int)SEM_VALUE_MAX, std::numeric_limits<unsigned int>::max());
 
   sem_t my_semaphore;
 
@@ -45,25 +67,14 @@ int TestSemInitErrors() {
   const unsigned int sem_max_plus_1 = (unsigned) SEM_VALUE_MAX + 1;
 
   // sem_init should return -1 and errno should equal EINVAL
-  EXPECT(-1 == sem_init(&my_semaphore, 0, sem_max_plus_1));
-  EXPECT(EINVAL == errno);
+  EXPECT_EQ(-1, sem_init(&my_semaphore, 0, sem_max_plus_1));
+  EXPECT_EQ(EINVAL, errno);
 
   // Try with the largest possible unsigned int.
-  EXPECT(-1 == sem_init(&my_semaphore,
+  EXPECT_EQ(-1, sem_init(&my_semaphore,
                         0,
                         std::numeric_limits<unsigned int>::max()));
-  EXPECT(EINVAL == errno);
-
-#if !defined(__GLIBC__)
-  // nacl-newlib's semaphores do not currently support the pshared
-  // option, so this should fail with an ENOSYS error.  If pshared
-  // gets added, we should begin testing it for proper successful
-  // behavior.
-  EXPECT(-1 == sem_init(&my_semaphore, 1, 0));
-  EXPECT(ENOSYS == errno);
-#endif
-
-  END_TEST();
+  EXPECT_EQ(EINVAL, errno);
 }
 
 // Test error conditions of sem_post and return the number of failed checks.
@@ -81,17 +92,13 @@ int TestSemInitErrors() {
 //         EOVERFLOW
 //                The maximum allowable value for a semaphore would be exceeded.
 // ===================================
-int TestSemPostErrors() {
-  START_TEST("sem_post error conditions");
-
+TEST_F(SemaphoreTests, TestSemPostErrors) {
   // Initialize a semaphore with the max value, and try to post to it.
   sem_t my_semaphore;
-  EXPECT(0 == sem_init(&my_semaphore, 0, SEM_VALUE_MAX));
-  EXPECT(-1 == sem_post(&my_semaphore));
-  EXPECT(EOVERFLOW == errno);
-  EXPECT(0 == sem_destroy(&my_semaphore));
-
-  END_TEST();
+  EXPECT_EQ(0, sem_init(&my_semaphore, 0, SEM_VALUE_MAX));
+  EXPECT_EQ(-1, sem_post(&my_semaphore));
+  EXPECT_EQ(EOVERFLOW, errno);
+  EXPECT_EQ(0, sem_destroy(&my_semaphore));
 }
 
 // The real type of the void* argument to PostThreadFunc.  See PostThreadFunc
@@ -116,86 +123,73 @@ void* PostThreadFunc(void* poster_thread_arg) {
   return NULL;
 }
 
-int TestSemNormalOperation() {
-  START_TEST("semaphore normal operation");
+TEST_F(SemaphoreTests, TestSemNormalOperation) {
 
   // Test 1 thread posting to 1 semaphore.
   sem_t my_semaphore;
-  EXPECT(0 == sem_init(&my_semaphore, 0, 0));
+  EXPECT_EQ(0, sem_init(&my_semaphore, 0, 0));
   PostThreadArg pta = { &my_semaphore, /* semaphore */
                         500000u, /* sleep_microseconds */
                         1 /* iterations */ };
   pthread_t my_thread;
-  EXPECT(0 == pthread_create(&my_thread, 0, &PostThreadFunc, &pta));
-  EXPECT(0 == sem_wait(&my_semaphore));
-  EXPECT(0 == pthread_join(my_thread, 0));
-  EXPECT(0 == sem_destroy(&my_semaphore));
+  EXPECT_EQ(0, pthread_create(&my_thread, 0, &PostThreadFunc, &pta));
+  EXPECT_EQ(0, sem_wait(&my_semaphore));
+  EXPECT_EQ(0, pthread_join(my_thread, 0));
+  EXPECT_EQ(0, sem_destroy(&my_semaphore));
 
   // Reinitialize a previously used semaphore, test 10 threads posting to 1
   // semaphore, 5 times each.
-  EXPECT(0 == sem_init(&my_semaphore, 0, 0));
+  EXPECT_EQ(0, sem_init(&my_semaphore, 0, 0));
   pta.iterations = 5;
   pthread_t my_thread_array[10];
   for (int i = 0; i < 10; ++i) {
-    EXPECT(0 == pthread_create(&my_thread_array[i], 0, &PostThreadFunc, &pta));
+    EXPECT_EQ(0, pthread_create(&my_thread_array[i], 0, &PostThreadFunc, &pta));
   }
   // Wait 5*10 times, once per post:  5 posts for each of 10 posting-threads.
   for (int i = 0; i < 5*10; ++i) {
-    EXPECT(0 == sem_wait(&my_semaphore));
+    EXPECT_EQ(0, sem_wait(&my_semaphore));
   }
   for (int i = 0; i < 10; ++i) {
-    EXPECT(0 == pthread_join(my_thread_array[i], 0));
+    EXPECT_EQ(0, pthread_join(my_thread_array[i], 0));
   }
-  EXPECT(0 == sem_destroy(&my_semaphore));
+  EXPECT_EQ(0, sem_destroy(&my_semaphore));
 
   // Reinitialize the previously used semaphore again, this time with a positive
   // starting value.
-  EXPECT(0 == sem_init(&my_semaphore, 0, 5));
+  EXPECT_EQ(0, sem_init(&my_semaphore, 0, 5));
   pta.iterations = 1;
-  EXPECT(0 == pthread_create(&my_thread, 0, &PostThreadFunc, &pta));
+  EXPECT_EQ(0, pthread_create(&my_thread, 0, &PostThreadFunc, &pta));
   // Wait 6 times, once for the post, 5 times for the initial starting value.
   for (int i = 0; i < 6; ++i) {
-    EXPECT(0 == sem_wait(&my_semaphore));
+    EXPECT_EQ(0, sem_wait(&my_semaphore));
   }
-  EXPECT(0 == pthread_join(my_thread, 0));
-  EXPECT(0 == sem_destroy(&my_semaphore));
-
-  END_TEST();
+  EXPECT_EQ(0, pthread_join(my_thread, 0));
+  EXPECT_EQ(0, sem_destroy(&my_semaphore));
 }
 
-int TestSemTryWait() {
-  START_TEST("test sem_trywait() and sem_getvalue()");
+TEST_F(SemaphoreTests, TestSemTryWait) {
 
   int start_value = 10;
   sem_t sem;
-  EXPECT(0 == sem_init(&sem, 0, start_value));
+  EXPECT_EQ(0, sem_init(&sem, 0, start_value));
 
   int value = -1;
-  EXPECT(0 == sem_getvalue(&sem, &value));
-  EXPECT(10 == value);
+  EXPECT_EQ(0, sem_getvalue(&sem, &value));
+  EXPECT_EQ(10, value);
   // When the semaphore's value is positive, each call to
   // sem_trywait() should decrement the semaphore's value.
   for (int i = 1; i <= start_value; i++) {
-    EXPECT(0 == sem_trywait(&sem));
-    EXPECT(0 == sem_getvalue(&sem, &value));
-    EXPECT(start_value - i == value);
+    EXPECT_EQ(0, sem_trywait(&sem));
+    EXPECT_EQ(0, sem_getvalue(&sem, &value));
+    EXPECT_EQ(start_value - i, value);
   }
   // When the semaphore's value is zero, sem_trywait() should fail.
-  EXPECT(-1 == sem_trywait(&sem));
-  EXPECT(EAGAIN == errno);
-  EXPECT(0 == sem_getvalue(&sem, &value));
-  EXPECT(0 == value);
+  EXPECT_EQ(-1, sem_trywait(&sem));
+  EXPECT_EQ(EAGAIN, errno);
+  EXPECT_EQ(0, sem_getvalue(&sem, &value));
+  EXPECT_EQ(0, value);
 
-  EXPECT(0 == sem_destroy(&sem));
+  EXPECT_EQ(0, sem_destroy(&sem));
 
-  END_TEST();
 }
 
-int main() {
-  int fail_count = 0;
-  fail_count += TestSemInitErrors();
-  fail_count += TestSemPostErrors();
-  fail_count += TestSemNormalOperation();
-  fail_count += TestSemTryWait();
-  std::exit(fail_count);
-}

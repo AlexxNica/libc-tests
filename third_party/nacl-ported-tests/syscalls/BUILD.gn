@@ -5,6 +5,7 @@
 source_set("small_tests") {
   sources = [
     "getpid_test.cc",
+    "semaphore_tests.cc",
   ]
   deps = [
     "//third_party/gtest",
