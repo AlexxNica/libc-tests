@@ -10,3 +10,12 @@ executable("libc-tests") {
     "//third_party/gtest",
   ]
 }
+
+executable("libc-tests-broken") {
+  sources = [
+      "main.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}
