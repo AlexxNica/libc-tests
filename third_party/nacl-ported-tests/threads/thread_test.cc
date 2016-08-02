@@ -19,38 +19,23 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
-
-#include "native_client/src/untrusted/valgrind/dynamic_annotations.h"
+#include "gtest/gtest.h"
 
 #define ARRAY_SIZE(x) (sizeof (x) / sizeof (x)[0])
 #define TIMEOUT_TIME_NS       (500 * 1000 * 1000)  /* 500 ms in ns */
 #define TIMEOUT_EARLY_MS      (18)
-#define TIMEOUT_CHECK_NS      (TIMEOUT_TIME_NS - TIMEOUT_EARLY_MS * 1000 * 1000)
-/*
- * It appears that on Windows, sometimes the wait just returns early,
- * and greater "slop" is required -- so we permit TIMEOUT_EARLY_MS
- * number of milliseconds.
- *
- * The observed early wake up on Windows is ~15ms, which is the
- * Windows scheduling quantum.
- */
+#define TIMEOUT_CHECK_NS      (TIMEOUT_TIME_NS - TIMEOUT_EARLY_MS * 1000ull * 1000)
 
-/*
- * On x86, we cannot have more than just shy of 8192 threads running
- * simultaneously.  This is a NaCl architectural limitation.
- * On ARM the limit is 4k.
- * Note that some thread related memory is never freed.
- * On ARM this is quite substantial (about 4kB).
- *
- * Due to a bug either in pthreads, or newlib, or even in the TCB,
- * g_num_test_loops cannot be much bigger than 100 without making
- * the test unreliable on multiple platforms.
- *
- * The number of rounds can be changed on the commandline.
- */
 
-int g_num_test_loops  = 100;
-int g_run_intrinsic   = 0;
+// Currently we do not have tsan running so disabling ANNOTATE_* macros
+#if !defined(__has_feature) || !__has_feature(thread_sanitizer)
+#define ANNOTATE_HAPPENS_BEFORE(addr)
+#define ANNOTATE_HAPPENS_AFTER(addr)
+#define ANNOTATE_IGNORE_WRITES_BEGIN()
+#define ANNOTATE_IGNORE_WRITES_END()
+#endif
+
+int g_num_test_loops  = 500;
 
 /* Macros so we can use it for array dimensions in ISO C90 */
 #define NUM_THREADS 10
@@ -75,37 +60,32 @@ int g_verbose = 0;
 
 #define PRINT_ERROR do { PRINT(1, ("Error\n")); g_errors++; } while (0)
 
-/* TODO(adonovan): display informative errors. */
-#define EXPECT_EQ(A, B) do { if ((A)!=(B)) PRINT_ERROR; } while (0)
-#define EXPECT_NE(A, B) do { if ((A)==(B)) PRINT_ERROR; } while (0)
-#define EXPECT_GE(A, B) do { if ((A)<(B)) PRINT_ERROR; } while (0)
-#define EXPECT_LE(A, B) do { if ((A)>(B)) PRINT_ERROR; } while (0)
-
-static void CheckSuccess(int err, const char *filename, int lineno,
-                         const char *expr) {
-  if (err != 0) {
-    printf("pthread function failed with errno %i at %s:%i: %s\n",
-           err, filename, lineno, expr);
-    _exit(1);
-  }
-}
-
-#define CHECK_OK(expr) (CheckSuccess((expr), __FILE__, __LINE__, #expr))
-
-
-#define TEST_FUNCTION_START int local_error = g_errors; PRINT(1, ("Start\n"))
-
-#define TEST_FUNCTION_END if (local_error == g_errors) { \
-                            PRINT(1, ("OK\n")); \
-                          } else { \
-                            PRINT(1, ("FAILED\n")); \
-                          }
-
 
 struct SYNC_DATA {
   pthread_mutex_t mutex;
   pthread_cond_t cv;
 };
+
+namespace {
+
+class ThreadTests : public ::testing::Test {
+ protected:
+  ThreadTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~ThreadTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
 
 
 typedef void* (*ThreadFunction)(void *state);
@@ -141,9 +121,9 @@ int pthread_create_check_eagain(pthread_t *thread_id,
 void CreateWithJoin(ThreadFunction func, void *state) {
   pthread_t thread_id;
   void* thread_ret;
-  CHECK_OK(pthread_create_check_eagain(&thread_id, NULL, func, state));
+  ASSERT_EQ(0, pthread_create_check_eagain(&thread_id, NULL, func, state));
   /* wait for thread to exit */
-  CHECK_OK(pthread_join(thread_id, &thread_ret));
+  ASSERT_EQ(0, pthread_join(thread_id, &thread_ret));
 }
 
 
@@ -151,9 +131,9 @@ void CreateWithJoin(ThreadFunction func, void *state) {
 void CreateDetached(void) {
   pthread_t thread_id;
   pthread_attr_t attr;
-  CHECK_OK(pthread_attr_init(&attr));
-  CHECK_OK(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
-  CHECK_OK(pthread_create_check_eagain(&thread_id, &attr, FastThread, NULL));
+  ASSERT_EQ(0, pthread_attr_init(&attr));
+  ASSERT_EQ(0, pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
+  ASSERT_EQ(0, pthread_create_check_eagain(&thread_id, &attr, FastThread, NULL));
   /* cannot join on detached thread */
 }
 
@@ -161,69 +141,62 @@ void CreateDetached(void) {
 void* TlsThread(void* state) {
   struct SYNC_DATA* sync_data = (struct SYNC_DATA*)state;
   PRINT(g_verbose, ("start signal thread: %d\n", tls_var));
-  CHECK_OK(pthread_mutex_lock(&sync_data->mutex));
+  EXPECT_EQ(0, pthread_mutex_lock(&sync_data->mutex));
   tls_var = 8;
   g_ready = 1;
-  CHECK_OK(pthread_cond_signal(&sync_data->cv));
-  CHECK_OK(pthread_mutex_unlock(&sync_data->mutex));
+  EXPECT_EQ(0, pthread_cond_signal(&sync_data->cv));
+  EXPECT_EQ(0, pthread_mutex_unlock(&sync_data->mutex));
   PRINT(g_verbose, ("terminate signal thread\n"));
   return (void*)33;
 }
 
 
-void TestTlsAndSync(void) {
+TEST_F(ThreadTests, TestTlsAndSync) {
   pthread_t thread_id;
   pthread_attr_t attr;
   struct SYNC_DATA sync_data;
 
-  TEST_FUNCTION_START;
+  ASSERT_EQ(0, pthread_mutex_init(&sync_data.mutex, NULL));
+  ASSERT_EQ(0, pthread_cond_init(&sync_data.cv, NULL));
+  ASSERT_EQ(0, pthread_attr_init(&attr));
+  ASSERT_EQ(0, pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
 
-  CHECK_OK(pthread_mutex_init(&sync_data.mutex, NULL));
-  CHECK_OK(pthread_cond_init(&sync_data.cv, NULL));
-  CHECK_OK(pthread_attr_init(&attr));
-  CHECK_OK(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
-
-  CHECK_OK(pthread_create_check_eagain(&thread_id, &attr,
+  ASSERT_EQ(0, pthread_create_check_eagain(&thread_id, &attr,
                                        TlsThread, &sync_data));
 
   EXPECT_EQ(5, tls_var);
-  CHECK_OK(pthread_mutex_lock(&sync_data.mutex));
+  ASSERT_EQ(0, pthread_mutex_lock(&sync_data.mutex));
 
   while (!g_ready) {
-    CHECK_OK(pthread_cond_wait(&sync_data.cv, &sync_data.mutex));
+    ASSERT_EQ(0, pthread_cond_wait(&sync_data.cv, &sync_data.mutex));
   }
 
   EXPECT_EQ(5, tls_var);
 
-  CHECK_OK(pthread_mutex_unlock(&sync_data.mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&sync_data.mutex));
   EXPECT_EQ(5, tls_var);
-  TEST_FUNCTION_END;
 }
 
 
-void TestManyThreadsJoinable(void) {
+TEST_F(ThreadTests, TestManyThreadsJoinable) {
   int i;
-  TEST_FUNCTION_START;
   for (i = 0; i < g_num_test_loops; i++) {
     if (i % (g_num_test_loops / 10) == 0) {
       PRINT(g_verbose, ("round %d\n", i));
     }
     CreateWithJoin(FastThread, NULL);
   }
-  TEST_FUNCTION_END;
 }
 
 
-void TestManyThreadsDetached(void) {
+TEST_F(ThreadTests, TestManyThreadsDetached) {
   int i;
-  TEST_FUNCTION_START;
   for (i = 0; i < g_num_test_loops; i++) {
     if (i % (g_num_test_loops / 10) == 0) {
       PRINT(g_verbose, ("round %d\n", i));
     }
     CreateDetached();
   }
-  TEST_FUNCTION_END;
 }
 
 
@@ -240,20 +213,19 @@ void* SemaphoresThread(void *state) {
   return 0;
 }
 
-void TestSemaphores(void) {
+TEST_F(ThreadTests, TestSemaphores) {
   int i;
   int rv;
   pthread_t thread_id;
   pthread_attr_t attr;
   sem_t sem[2];
-  TEST_FUNCTION_START;
   sem_init(&sem[0], 0, 0);
   sem_init(&sem[1], 0, 0);
 
-  CHECK_OK(pthread_attr_init(&attr));
-  CHECK_OK(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
+  ASSERT_EQ(0, pthread_attr_init(&attr));
+  ASSERT_EQ(0, pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
 
-  CHECK_OK(pthread_create_check_eagain(&thread_id, &attr,
+  ASSERT_EQ(0, pthread_create_check_eagain(&thread_id, &attr,
                                        SemaphoresThread, sem));
 
   for (i = 0; i < g_num_test_loops; i++) {
@@ -267,13 +239,11 @@ void TestSemaphores(void) {
   }
   sem_destroy(&sem[0]);
   sem_destroy(&sem[1]);
-  TEST_FUNCTION_END;
 }
 
-void TestSemaphoreInitDestroy(void) {
+TEST_F(ThreadTests, TestSemaphoreInitDestroy) {
   sem_t sem;
   int rv;
-  TEST_FUNCTION_START;
 
   rv = sem_init(&sem, 0, (unsigned) SEM_VALUE_MAX + 1);
   EXPECT_EQ(-1, rv);  /* failure */
@@ -288,75 +258,62 @@ void TestSemaphoreInitDestroy(void) {
   rv  = sem_destroy(&sem);
   EXPECT_EQ(0, rv);
 
-  TEST_FUNCTION_END;
 }
 
-void TestTryLockReturnValue(void) {
+TEST_F(ThreadTests, TestTryLockReturnValue) {
   pthread_mutex_t mutex;
   int rv;
-  TEST_FUNCTION_START;
 
-  CHECK_OK(pthread_mutex_init(&mutex, NULL));
-  CHECK_OK(pthread_mutex_lock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, NULL));
+  ASSERT_EQ(0, pthread_mutex_lock(&mutex));
   rv = pthread_mutex_trylock(&mutex);
 
   EXPECT_EQ(EBUSY, rv);
-
-  TEST_FUNCTION_END;
 }
 
-void TestDoubleUnlockReturnValue(void) {
+TEST_F(ThreadTests, TestDoubleUnlockReturnValue) {
   pthread_mutex_t mutex;
   int rv;
-  TEST_FUNCTION_START;
 
   /*
    * Calling pthread_mutex_unlock on an unlocked mutex is actually
    * undefined behavior under POSIX unless it's an ERRORCHECK mutex.
    */
   pthread_mutexattr_t attr;
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  CHECK_OK(pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK));
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
+  ASSERT_EQ(0, pthread_mutexattr_init(&attr));
+  ASSERT_EQ(0, pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, &attr));
 
-  CHECK_OK(pthread_mutex_lock(&mutex));
-  CHECK_OK(pthread_mutex_unlock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_lock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mutex));
   rv = pthread_mutex_unlock(&mutex);
 
   EXPECT_EQ(EPERM, rv);
 
-  TEST_FUNCTION_END;
 }
 
-void TestUnlockUninitializedReturnValue(void) {
+TEST_F(ThreadTests, TestUnlockUninitializedReturnValue) {
   pthread_mutex_t mutex;
   int rv;
-  TEST_FUNCTION_START;
 
   /*
    * Calling pthread_mutex_unlock on an unlocked mutex is actually
    * undefined behavior under POSIX unless it's an ERRORCHECK mutex.
    */
   pthread_mutexattr_t attr;
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  CHECK_OK(pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK));
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
+  ASSERT_EQ(0, pthread_mutexattr_init(&attr));
+  ASSERT_EQ(0, pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, &attr));
 
   rv = pthread_mutex_unlock(&mutex);
 
   EXPECT_EQ(EPERM, rv);
 
-  TEST_FUNCTION_END;
 }
 
 pthread_once_t once_control = PTHREAD_ONCE_INIT;
 
-/*
- * The nacl-newlib pthread.h declares this type, but glibc's pthread.h does not.
- */
-#ifdef __GLIBC__
 typedef int AtomicInt32;
-#endif
 
 void pthread_once_routine(void) {
   static AtomicInt32 count = 0;
@@ -365,14 +322,13 @@ void pthread_once_routine(void) {
 }
 
 void* OnceThread(void *userdata) {
-  CHECK_OK(pthread_once(&once_control, pthread_once_routine));
+  EXPECT_EQ(0, pthread_once(&once_control, pthread_once_routine));
   return 0;
 }
 
 
-void TestPthreadOnce(void) {
+TEST_F(ThreadTests, TestPthreadOnce) {
   int i;
-  TEST_FUNCTION_START;
   PRINT(g_verbose, ("creating %d threads\n", g_num_test_loops));
   for (i = 0; i < g_num_test_loops; i++) {
     pthread_t thread_id;
@@ -380,98 +336,91 @@ void TestPthreadOnce(void) {
     if (i % (g_num_test_loops / 10) == 0) {
       PRINT(g_verbose, ("round %d\n", i));
     }
-    CHECK_OK(pthread_attr_init(&attr));
-    CHECK_OK(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
-    CHECK_OK(pthread_create_check_eagain(&thread_id, &attr, OnceThread, NULL));
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
+    ASSERT_EQ(0, pthread_create_check_eagain(&thread_id, &attr, OnceThread, NULL));
   }
-  TEST_FUNCTION_END;
 }
 
 void* RecursiveLockThread(void *state) {
   int i;
-  pthread_mutex_t *lock = state;
+  pthread_mutex_t *lock = (pthread_mutex_t *)state;
 
   for (i = 0; i < g_num_test_loops; ++i) {
-    CHECK_OK(pthread_mutex_lock(lock));
+    EXPECT_EQ(0, pthread_mutex_lock(lock));
   }
 
   for (i = 0; i < g_num_test_loops; ++i) {
-    CHECK_OK(pthread_mutex_unlock(lock));
+    EXPECT_EQ(0, pthread_mutex_unlock(lock));
   }
 
   return 0;
 }
 
-void TestRecursiveMutex(void) {
+TEST_F(ThreadTests, TestRecursiveMutex) {
   pthread_mutexattr_t attr;
   pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
   pthread_t tid[NUM_THREADS];
   int i = 0;
-  TEST_FUNCTION_START;
 
   PRINT(g_verbose, ("starting threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_create_check_eagain(&tid[i], NULL,
+    ASSERT_EQ(0, pthread_create_check_eagain(&tid[i], NULL,
                                          RecursiveLockThread, &mutex));
   }
 
   PRINT(g_verbose, ("joining threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_join(tid[i], NULL));
+    ASSERT_EQ(0, pthread_join(tid[i], NULL));
   }
 
   PRINT(g_verbose, ("checking\n"));
-  CHECK_OK(pthread_mutex_lock(&mutex));
-  CHECK_OK(pthread_mutex_trylock(&mutex));
-  CHECK_OK(pthread_mutex_unlock(&mutex));
-  CHECK_OK(pthread_mutex_unlock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_lock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_trylock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mutex));
 
-  CHECK_OK(pthread_mutex_destroy(&mutex));
+  ASSERT_EQ(0, pthread_mutex_destroy(&mutex));
   memset(&mutex, 0, sizeof(mutex));
 
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  CHECK_OK(pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP));
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
+  ASSERT_EQ(0, pthread_mutexattr_init(&attr));
+  ASSERT_EQ(0, pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, &attr));
 
   PRINT(g_verbose, ("starting threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_create_check_eagain(&tid[i], NULL,
+    ASSERT_EQ(0, pthread_create_check_eagain(&tid[i], NULL,
                                          RecursiveLockThread, &mutex));
   }
 
   PRINT(g_verbose, ("joining threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_join(tid[i], NULL));
+    ASSERT_EQ(0, pthread_join(tid[i], NULL));
   }
-
-  TEST_FUNCTION_END;
 }
 
 
-void TestErrorCheckingMutex(void) {
+TEST_F(ThreadTests, TestErrorCheckingMutex) {
   pthread_mutexattr_t attr;
   pthread_mutex_t mutex;
   int rv;
 
-  TEST_FUNCTION_START;
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  CHECK_OK(pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK_NP));
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
+  ASSERT_EQ(0, pthread_mutexattr_init(&attr));
+  ASSERT_EQ(0, pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK_NP));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, &attr));
 
   rv = pthread_mutex_unlock(&mutex);
   EXPECT_NE(0, rv);
 
-  CHECK_OK(pthread_mutex_lock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_lock(&mutex));
 
   rv = pthread_mutex_trylock(&mutex);
   EXPECT_NE(0, rv);
 
-  CHECK_OK(pthread_mutex_unlock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mutex));
 
   rv = pthread_mutex_unlock(&mutex);
   EXPECT_NE(0, rv);
-
-  TEST_FUNCTION_END;
 }
 
 
@@ -483,20 +432,19 @@ pthread_key_t tsd_key;
 
 
 void* TsdThread(void *state) {
-  CHECK_OK(pthread_setspecific(tsd_key, state));
+  EXPECT_EQ(0, pthread_setspecific(tsd_key, state));
 
   return 0;
 }
 
 
-void TestTSD(void) {
+TEST_F(ThreadTests, TestTSD) {
   int rv;
   void* ptr;
   int destructor_count = 0;
-  TEST_FUNCTION_START;
-  CHECK_OK(pthread_key_create(&tsd_key, tsd_destructor));
+  ASSERT_EQ(0, pthread_key_create(&tsd_key, tsd_destructor));
 
-  CHECK_OK(pthread_setspecific(tsd_key, &rv));
+  ASSERT_EQ(0, pthread_setspecific(tsd_key, &rv));
 
   ptr = pthread_getspecific(tsd_key);
   EXPECT_EQ(ptr, &rv);
@@ -504,9 +452,8 @@ void TestTSD(void) {
   CreateWithJoin(TsdThread, &destructor_count);
   EXPECT_EQ(1, destructor_count);
 
-  CHECK_OK(pthread_key_delete(tsd_key));
+  ASSERT_EQ(0, pthread_key_delete(tsd_key));
 
-  TEST_FUNCTION_END;
 }
 
 
@@ -517,15 +464,13 @@ void *PthreadExitThread(void *unused) {
   return NULL;
 }
 
-void TestPthreadExit(void) {
+TEST_F(ThreadTests, TestPthreadExit) {
   pthread_t tid;
   void *result;
 
-  TEST_FUNCTION_START;
-  CHECK_OK(pthread_create_check_eagain(&tid, NULL, PthreadExitThread, NULL));
-  CHECK_OK(pthread_join(tid, &result));
+  ASSERT_EQ(0, pthread_create_check_eagain(&tid, NULL, PthreadExitThread, NULL));
+  ASSERT_EQ(0, pthread_join(tid, &result));
   EXPECT_EQ(result, (void *) 1234);
-  TEST_FUNCTION_END;
 }
 
 
@@ -534,31 +479,28 @@ void* MallocSmallThread(void *userdata) {
   int i;
   for (i = 0; i < g_num_test_loops; ++i) {
     ptr = (void*) malloc(16);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
   }
   return ptr;
 }
 
 
-void TestMallocSmall(void) {
+TEST_F(ThreadTests, TestMallocSmall) {
   int i = 0;
   pthread_t tid[NUM_THREADS];
-  TEST_FUNCTION_START;
 
   PRINT(g_verbose, ("starting threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_create_check_eagain(&tid[i], NULL,
+    ASSERT_EQ(0, pthread_create_check_eagain(&tid[i], NULL,
                                          MallocSmallThread, NULL));
   }
 
   PRINT(g_verbose, ("joining threads\n"));
   for (i = 0; i < NUM_THREADS; ++i) {
     void* mem;
-    CHECK_OK(pthread_join(tid[i], &mem));
+    ASSERT_EQ(0, pthread_join(tid[i], &mem));
     free(mem);
   }
-
-  TEST_FUNCTION_END;
 }
 
 
@@ -569,7 +511,7 @@ void* MallocLargeThread(void *unused) {
   int i;
   for (i = 0; i < 100; i++) {
     blocks[i] = malloc(0x1000);
-    EXPECT_NE(blocks[i], NULL);
+    EXPECT_NE(blocks[i], nullptr);
   }
   for (i = 0; i < 100; i++) {
     free(blocks[i]);
@@ -577,19 +519,17 @@ void* MallocLargeThread(void *unused) {
   return NULL;
 }
 
-void TestMallocLarge(void) {
+TEST_F(ThreadTests, TestMallocLarge) {
   int i = 0;
   pthread_t tid[NUM_THREADS];
-  TEST_FUNCTION_START;
 
   for (i = 0; i < NUM_THREADS; i++) {
-    CHECK_OK(pthread_create_check_eagain(&tid[i], NULL,
+    ASSERT_EQ(0, pthread_create_check_eagain(&tid[i], NULL,
                                          MallocLargeThread, NULL));
   }
   for (i = 0; i < NUM_THREADS; i++) {
-    CHECK_OK(pthread_join(tid[i], NULL));
+    ASSERT_EQ(0, pthread_join(tid[i], NULL));
   }
-  TEST_FUNCTION_END;
 }
 
 
@@ -599,34 +539,32 @@ void* ReallocThread(void *userdata) {
   ptr = (void*) malloc(16);
   for (i = 0; i < g_num_test_loops; ++i) {
     ptr = (void*)realloc(ptr, 32);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
     ptr = (void*)realloc(ptr, 64000);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
     ptr = (void*)realloc(ptr, 64);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
     ptr = (void*)realloc(ptr, 32000);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
     ptr = (void*)realloc(ptr, 256);
-    EXPECT_NE(NULL, ptr);
+    EXPECT_NE(nullptr, ptr);
   }
 
   return ptr;
 }
 
 
-void TestRealloc(void) {
+TEST_F(ThreadTests, TestRealloc) {
   pthread_t tid[NUM_THREADS];
   int i = 0;
-  TEST_FUNCTION_START;
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_create_check_eagain(&tid[i], NULL, ReallocThread, NULL));
+    ASSERT_EQ(0, pthread_create_check_eagain(&tid[i], NULL, ReallocThread, NULL));
   }
 
   for (i = 0; i < NUM_THREADS; ++i) {
-    CHECK_OK(pthread_join(tid[i], NULL));
+    ASSERT_EQ(0, pthread_join(tid[i], NULL));
   }
 
-  TEST_FUNCTION_END;
 }
 
 /* Worker threads should spin-wait for this condition before starting work. */
@@ -703,11 +641,11 @@ static void* WorkerThread(void *data) {
 static void CheckAtomicityUnderConcurrency(void) {
   volatile AtomicInt32 counter = 0;
   pthread_t threads[NUM_THREADS];
-  int ii;
+  unsigned long ii;
 
   workers_begin = 0; /* Hold on... */
   for (ii = 0; ii < ARRAY_SIZE(threads); ++ii)
-    CHECK_OK(pthread_create_check_eagain(&threads[ii], NULL, &WorkerThread,
+    ASSERT_EQ(0, pthread_create_check_eagain(&threads[ii], NULL, &WorkerThread,
                                          (void*) &counter));
 
   ANNOTATE_HAPPENS_BEFORE(&workers_begin);
@@ -716,13 +654,12 @@ static void CheckAtomicityUnderConcurrency(void) {
   ANNOTATE_IGNORE_WRITES_END();
 
   for (ii = 0; ii < ARRAY_SIZE(threads); ++ii)
-    CHECK_OK(pthread_join(threads[ii], NULL));
-  EXPECT_EQ(ATOMIC_ITERATIONS * ARRAY_SIZE(threads), counter);
+    ASSERT_EQ(0, pthread_join(threads[ii], NULL));
+  EXPECT_EQ(ATOMIC_ITERATIONS * ARRAY_SIZE(threads), (unsigned long) counter);
 }
 
 /* Test hand-written intrinsics for ARM. */
-static void TestIntrinsics(void) {
-  TEST_FUNCTION_START;
+TEST_F(ThreadTests, TestIntrinsics) {
 
   /* Test uncontended behaviour: */
   {
@@ -747,20 +684,17 @@ static void TestIntrinsics(void) {
 
   intrinsic = FETCH_AND_ADD;
   CheckAtomicityUnderConcurrency();
-
-  TEST_FUNCTION_END;
 }
 
-static void TestCondvar(void) {
+TEST_F(ThreadTests, TestCondvar) {
   int i = 0;
   pthread_cond_t cv;
   pthread_mutex_t mu;
   struct timeval  tv;
   struct timespec ts;
   int res = 0;
-  TEST_FUNCTION_START;
-  CHECK_OK(pthread_mutex_init(&mu, NULL));
-  CHECK_OK(pthread_cond_init(&cv, NULL));
+  ASSERT_EQ(0, pthread_mutex_init(&mu, NULL));
+  ASSERT_EQ(0, pthread_cond_init(&cv, NULL));
 
   /* We just need the condvar to expire, so we use the current time */
   res = gettimeofday(&tv, NULL);
@@ -768,7 +702,7 @@ static void TestCondvar(void) {
   ts.tv_sec = tv.tv_sec;
   ts.tv_nsec = 0;
 
-  CHECK_OK(pthread_mutex_lock(&mu));
+  ASSERT_EQ(0, pthread_mutex_lock(&mu));
   /* We try several times since the wait may return for a different reason. */
   while (i < 10) {
     res = pthread_cond_timedwait(&cv, &mu, &ts);
@@ -778,82 +712,45 @@ static void TestCondvar(void) {
   }
   EXPECT_EQ(ETIMEDOUT, res);
 
-  CHECK_OK(pthread_mutex_unlock(&mu));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mu));
 
-  CHECK_OK(pthread_cond_destroy(&cv));
-  CHECK_OK(pthread_mutex_destroy(&mu));
-
-  TEST_FUNCTION_END;
+  ASSERT_EQ(0, pthread_cond_destroy(&cv));
+  ASSERT_EQ(0, pthread_mutex_destroy(&mu));
 }
 
-static void TestMutexAttrs(void) {
-  TEST_FUNCTION_START;
-  int shared = -1;
-  pthread_mutex_t mutex;
-  pthread_mutexattr_t attr;
 
-  /* Verify default attribute settings */
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  CHECK_OK(pthread_mutexattr_getpshared(&attr, &shared));
-  EXPECT_EQ(PTHREAD_PROCESS_PRIVATE, shared);
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
-  CHECK_OK(pthread_mutex_destroy(&mutex));
-
-  /* Verify we can set attributes to their default value. */
-  CHECK_OK(pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE));
-  CHECK_OK(pthread_mutex_init(&mutex, &attr));
-  CHECK_OK(pthread_mutex_destroy(&mutex));
-  CHECK_OK(pthread_mutexattr_destroy(&attr));
-
-  /*
-   * Verify that setting attributes to unsupported values fails.
-   */
-  CHECK_OK(pthread_mutexattr_init(&attr));
-  EXPECT_EQ(ENOTSUP,
-            pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED));
-  CHECK_OK(pthread_mutexattr_destroy(&attr));
-
-  TEST_FUNCTION_END;
-}
-
-static void TestCondvarAttrs(void) {
-  TEST_FUNCTION_START;
+TEST_F(ThreadTests, TestCondvarAttrs) {
   clockid_t clock_id = -1;
   int shared = -1;
   pthread_cond_t cv;
   pthread_condattr_t attr;
 
   /* Verify default attribute settings */
-  CHECK_OK(pthread_condattr_init(&attr));
-  CHECK_OK(pthread_condattr_getclock(&attr, &clock_id));
+  ASSERT_EQ(0, pthread_condattr_init(&attr));
+  ASSERT_EQ(0, pthread_condattr_getclock(&attr, &clock_id));
   EXPECT_EQ(CLOCK_REALTIME, clock_id);
-  CHECK_OK(pthread_condattr_getpshared(&attr, &shared));
   EXPECT_EQ(PTHREAD_PROCESS_PRIVATE, shared);
 
-  CHECK_OK(pthread_cond_init(&cv, &attr));
-  CHECK_OK(pthread_cond_destroy(&cv));
+  ASSERT_EQ(0, pthread_cond_init(&cv, &attr));
+  ASSERT_EQ(0, pthread_cond_destroy(&cv));
 
   /* Verify we can set attributes to their default value. */
-  CHECK_OK(pthread_condattr_setclock(&attr, CLOCK_REALTIME));
-  CHECK_OK(pthread_condattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE));
-  CHECK_OK(pthread_cond_init(&cv, &attr));
-  CHECK_OK(pthread_cond_destroy(&cv));
-  CHECK_OK(pthread_condattr_destroy(&attr));
+  ASSERT_EQ(0, pthread_condattr_setclock(&attr, CLOCK_REALTIME));
+  ASSERT_EQ(0, pthread_cond_init(&cv, &attr));
+  ASSERT_EQ(0, pthread_cond_destroy(&cv));
+  ASSERT_EQ(0, pthread_condattr_destroy(&attr));
 
   /*
    * Verify that setting attributes to unsupported values fails.
    */
-  CHECK_OK(pthread_condattr_init(&attr));
+  ASSERT_EQ(0, pthread_condattr_init(&attr));
   EXPECT_EQ(ENOTSUP, pthread_condattr_setclock(&attr, CLOCK_MONOTONIC));
-  EXPECT_EQ(ENOTSUP, pthread_condattr_setpshared(&attr,
                                                  PTHREAD_PROCESS_SHARED));
-  CHECK_OK(pthread_condattr_destroy(&attr));
-
-  TEST_FUNCTION_END;
+  ASSERT_EQ(0, pthread_condattr_destroy(&attr));
 }
 
 void AddNanosecondsToTimespec(struct timespec *time, unsigned int nanoseconds) {
-  EXPECT_LE(nanoseconds, 1000000000);
+  EXPECT_LE(nanoseconds, 1000000000u);
   time->tv_nsec += nanoseconds;
   if (time->tv_nsec > 1000000000) {
     time->tv_nsec -= 1000000000;
@@ -861,7 +758,7 @@ void AddNanosecondsToTimespec(struct timespec *time, unsigned int nanoseconds) {
   }
 }
 
-static void TestCondvarTimeout(void) {
+TEST_F(ThreadTests, TestCondvarTimeout) {
   int i = 0;
   pthread_cond_t cv;
   pthread_mutex_t mu;
@@ -870,9 +767,8 @@ static void TestCondvarTimeout(void) {
   struct timespec t_end;
   uint64_t elapsed_ns;
   int res = 0;
-  TEST_FUNCTION_START;
-  CHECK_OK(pthread_mutex_init(&mu, NULL));
-  CHECK_OK(pthread_cond_init(&cv, NULL));
+  ASSERT_EQ(0, pthread_mutex_init(&mu, NULL));
+  ASSERT_EQ(0, pthread_cond_init(&cv, NULL));
 
   /*
    * The timeout value for pthread_cond_timedwait is in absolute
@@ -884,7 +780,7 @@ static void TestCondvarTimeout(void) {
   t_timeout = t_start;
   AddNanosecondsToTimespec(&t_timeout, TIMEOUT_TIME_NS);
 
-  CHECK_OK(pthread_mutex_lock(&mu));
+  ASSERT_EQ(0, pthread_mutex_lock(&mu));
 
   /* We try several times since the wait may return for a different reason. */
   while (i < 10) {
@@ -897,7 +793,7 @@ static void TestCondvarTimeout(void) {
   printf("res = %d, ETIMEDOUT = %d\n", res, ETIMEDOUT);
   EXPECT_EQ(ETIMEDOUT, res);
 
-  CHECK_OK(pthread_mutex_unlock(&mu));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mu));
 
   res = clock_gettime(CLOCK_REALTIME, &t_end);
   EXPECT_EQ(res, 0);
@@ -908,21 +804,17 @@ static void TestCondvarTimeout(void) {
 
   EXPECT_GE(elapsed_ns, TIMEOUT_CHECK_NS);
 
-  CHECK_OK(pthread_cond_destroy(&cv));
-  CHECK_OK(pthread_mutex_destroy(&mu));
-
-  TEST_FUNCTION_END;
+  ASSERT_EQ(0, pthread_cond_destroy(&cv));
+  ASSERT_EQ(0, pthread_mutex_destroy(&mu));
 }
 
-void TestScope(void) {
+TEST_F(ThreadTests, TestScope) {
   pthread_attr_t attr;
   int scope;
 
-  TEST_FUNCTION_START;
-
   /* Check that the default scope is PTHREAD_SCOPE_SYSTEM */
-  CHECK_OK(pthread_attr_init(&attr));
-  CHECK_OK(pthread_attr_getscope(&attr, &scope));
+  ASSERT_EQ(0, pthread_attr_init(&attr));
+  ASSERT_EQ(0, pthread_attr_getscope(&attr, &scope));
   EXPECT_EQ(PTHREAD_SCOPE_SYSTEM, scope);
 
   /* Setting to PTHREAD_SCOPE_PROCESS is invalid */
@@ -930,27 +822,21 @@ void TestScope(void) {
   EXPECT_EQ(EINVAL, pthread_attr_setscope(&attr, 0xff));
 
   /* Setting to PTHREAD_SCOPE_SYSTEM should work (no-op) */
-  CHECK_OK(pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM));
-
-  TEST_FUNCTION_END;
+  ASSERT_EQ(0, pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM));
 }
 
-void TestStackSize(void) {
+TEST_F(ThreadTests, TestStackSize) {
   pthread_attr_t attr;
   size_t stack_size, stack_size2;
 
-  TEST_FUNCTION_START;
-
-  CHECK_OK(pthread_attr_init(&attr));
-  CHECK_OK(pthread_attr_getstacksize(&attr, &stack_size));
+  ASSERT_EQ(0, pthread_attr_init(&attr));
+  ASSERT_EQ(0, pthread_attr_getstacksize(&attr, &stack_size));
   stack_size *= 2;
 
-  CHECK_OK(pthread_attr_setstacksize(&attr, stack_size));
-  CHECK_OK(pthread_attr_getstacksize(&attr, &stack_size2));
+  ASSERT_EQ(0, pthread_attr_setstacksize(&attr, stack_size));
+  ASSERT_EQ(0, pthread_attr_getstacksize(&attr, &stack_size2));
 
   EXPECT_EQ(stack_size, stack_size2);
-
-  TEST_FUNCTION_END;
 }
 
 struct MutexClaimerThreadArgs {
@@ -959,7 +845,7 @@ struct MutexClaimerThreadArgs {
 };
 
 void *MutexClaimerThread(void *thread_arg) {
-  struct MutexClaimerThreadArgs *args = thread_arg;
+  struct MutexClaimerThreadArgs *args = (struct MutexClaimerThreadArgs *)thread_arg;
   for (;;) {
     pthread_mutex_lock(args->mutex);
     int should_exit = args->should_exit;
@@ -979,24 +865,23 @@ void *MutexClaimerThread(void *thread_arg) {
  * returned with ETIMEDOUT.  This problem occurred with NaCl's
  * newlib-based libpthread.
  */
-void TestErrorcheckMutexWorksWithCondvarTimeout(void) {
-  TEST_FUNCTION_START;
+TEST_F(ThreadTests, TestErrorcheckMutexWorksWithCondvarTimeout) {
 
   pthread_mutexattr_t attrs;
   pthread_mutex_t mutex;
   pthread_cond_t condvar;
-  CHECK_OK(pthread_mutexattr_init(&attrs));
-  CHECK_OK(pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_ERRORCHECK));
-  CHECK_OK(pthread_mutex_init(&mutex, &attrs));
-  CHECK_OK(pthread_mutexattr_destroy(&attrs));
-  CHECK_OK(pthread_cond_init(&condvar, NULL));
-  CHECK_OK(pthread_mutex_lock(&mutex));
+  ASSERT_EQ(0, pthread_mutexattr_init(&attrs));
+  ASSERT_EQ(0, pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_ERRORCHECK));
+  ASSERT_EQ(0, pthread_mutex_init(&mutex, &attrs));
+  ASSERT_EQ(0, pthread_mutexattr_destroy(&attrs));
+  ASSERT_EQ(0, pthread_cond_init(&condvar, NULL));
+  ASSERT_EQ(0, pthread_mutex_lock(&mutex));
 
   struct MutexClaimerThreadArgs thread_args;
   thread_args.mutex = &mutex;
   thread_args.should_exit = 0;
   pthread_t tid;
-  CHECK_OK(pthread_create(&tid, NULL, MutexClaimerThread, &thread_args));
+  ASSERT_EQ(0, pthread_create(&tid, NULL, MutexClaimerThread, &thread_args));
 
   struct timespec timeout;
   EXPECT_EQ(clock_gettime(CLOCK_REALTIME, &timeout), 0);
@@ -1014,53 +899,10 @@ void TestErrorcheckMutexWorksWithCondvarTimeout(void) {
   EXPECT_EQ(pthread_cond_timedwait(&condvar, &mutex, &timeout), ETIMEDOUT);
   thread_args.should_exit = 1;
   /* The bug manifests itself by pthread_mutex_unlock() returning EPERM. */
-  CHECK_OK(pthread_mutex_unlock(&mutex));
+  ASSERT_EQ(0, pthread_mutex_unlock(&mutex));
 
   /* Clean up. */
-  CHECK_OK(pthread_join(tid, NULL));
-  CHECK_OK(pthread_mutex_destroy(&mutex));
-  CHECK_OK(pthread_cond_destroy(&condvar));
-
-  TEST_FUNCTION_END;
-}
-
-int main(int argc, char *argv[]) {
-  if (argc > 1) {
-    g_num_test_loops = atoi(argv[1]);
-  }
-
-  if (argc > 2) {
-    if (strcasecmp(argv[2], "intrinsic") == 0)
-      g_run_intrinsic = 1;
-  }
-
-  TestTlsAndSync();
-  TestManyThreadsJoinable();
-  TestManyThreadsDetached();
-  TestSemaphores();
-  TestSemaphoreInitDestroy();
-  TestTryLockReturnValue();
-  TestDoubleUnlockReturnValue();
-  TestUnlockUninitializedReturnValue();
-  TestPthreadOnce();
-  TestRecursiveMutex();
-  TestErrorCheckingMutex();
-  TestTSD();
-  TestPthreadExit();
-  TestMallocSmall();
-  TestMallocLarge();
-  TestRealloc();
-
-  /* We have disabled this test by default since it is flaky under VMWARE. */
-  if (g_run_intrinsic) TestIntrinsics();
-
-  TestMutexAttrs();
-  TestCondvar();
-  TestCondvarAttrs();
-  TestCondvarTimeout();
-  TestStackSize();
-  TestScope();
-  TestErrorcheckMutexWorksWithCondvarTimeout();
-
-  return g_errors;
+  ASSERT_EQ(0, pthread_join(tid, NULL));
+  ASSERT_EQ(0, pthread_mutex_destroy(&mutex));
+  ASSERT_EQ(0, pthread_cond_destroy(&condvar));
 }

@@ -5,6 +5,8 @@
 source_set("small_tests") {
   sources = [
     "mutex_leak.cc",
+    # Enable this when it is compilable
+    # "thread_test.cc",
   ]
   deps = [
     "//third_party/gtest",
