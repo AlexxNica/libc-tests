@@ -4,6 +4,7 @@
 
 source_set("small_tests") {
   sources = [
+    "float_math.cc",
     "misc_math.cc",
   ]
   deps = [
