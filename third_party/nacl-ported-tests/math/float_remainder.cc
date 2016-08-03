@@ -8,118 +8,81 @@
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
+#include "gtest/gtest.h"
 
-/*
- * We want to be able to test LLVM's frem instruction without linking in fmod
- * at bitcode linking time to ensure that the native library has a
- * functioning copy of fmod. However, we also want to test that the bitcode
- * library's fmod also works. So we cannot test both fmod and frem in the
- * same build of the pexe, and instead build and test twice.
- */
-#if defined(TEST_LLVM_IR)
-extern double frem(double, double);
-extern float fremf(float, float);
-#define fmod frem
-#define fmodf fremf
-#endif
+#define CHECK_ERRNO(expected)                                                  \
+  do {                                                                         \
+    EXPECT_EQ(expected, errno);                                                \
+    /* Reset errno to something predictable. */                                \
+    errno = 0;                                                                 \
+  } while (0)
 
-#define CHECK_ERRNO(expected)                           \
-  do {                                                  \
-    if (expected != errno) {                            \
-      fprintf(stderr, "ERROR(%d): errno %d != %d\n",    \
-              __LINE__, expected, errno);               \
-      err_count++;                                      \
-    }                                                   \
-    /* Reset errno to something predictable. */         \
-    errno = 0;                                          \
-  } while(0)
+#define CHECK_NAN(err, numer, denom)                                           \
+  do {                                                                         \
+    double res = fmod(numer, denom);                                           \
+    CHECK_ERRNO(err);                                                          \
+    EXPECT_TRUE(isnan(res));                                                   \
+  } while (0)
 
-#define CHECK_NAN(err, numer, denom)                            \
-  do {                                                          \
-    double res = fmod(numer, denom);                            \
-    CHECK_ERRNO(err);                                           \
-    if (!isnan(res)) {                                          \
-      fprintf(stderr, "ERROR(%d): !isnan(%f mod %f) == %f\n",   \
-              __LINE__, numer, denom, res);                     \
-      err_count++;                                              \
-    }                                                           \
-  } while(0)
-
-#define CHECK_NANF(err, numer, denom)                           \
-  do {                                                          \
-    float res = fmodf(numer, denom);                            \
-    CHECK_ERRNO(err);                                           \
-    if (!isnan(res)) {                                          \
-      fprintf(stderr, "ERROR(%d): !isnan(%f modf %f) == %f\n",  \
-              __LINE__, numer, denom, res);                     \
-      err_count++;                                              \
-    }                                                           \
-  } while(0)
+#define CHECK_NANF(err, numer, denom)                                          \
+  do {                                                                         \
+    float res = fmodf(numer, denom);                                           \
+    CHECK_ERRNO(err);                                                          \
+    EXPECT_TRUE(isnan(res));                                                   \
+  } while (0)
 
 const double kTolerance = DBL_EPSILON;
 const double kToleranceF = FLT_EPSILON * 2;
 
-#define CHECK_EQ(expect, numer, denom)                                  \
-  do {                                                                  \
-    double res = fmod(numer, denom);                                    \
-    CHECK_ERRNO(0);                                                     \
-    /* The tolerance check may not work for SUBNORMAL, NaN, etc., so check */ \
-    if (!(fpclassify(res) == FP_NORMAL || fpclassify(res) == FP_ZERO)) { \
-      fprintf(stderr, "ERROR(%d): result is not normal/zero %f\n",      \
-              __LINE__, res);                                           \
-      err_count++;                                                      \
-    }                                                                   \
-    if (fabs(expect - res) > kTolerance) {                              \
-      fprintf(stderr, "ERROR: %f mod %f == %f, != %f\n",                \
-              numer, denom, res, expect);                               \
-      err_count++;                                                      \
-    }                                                                   \
-  } while(0)
+#define CHECK_EQ(expect, numer, denom)                                         \
+  do {                                                                         \
+    double res = fmod(numer, denom);                                           \
+    CHECK_ERRNO(0);                                                            \
+    /* The tolerance check may not work for SUBNORMAL, NaN, etc., so check */  \
+    EXPECT_TRUE(fpclassify(res) == FP_NORMAL || fpclassify(res) == FP_ZERO);   \
+    EXPECT_LE(fabs(expect - res), kTolerance);                                 \
+  } while (0)
+
+#define CHECK_EQF(expect, numer, denom)                                        \
+  do {                                                                         \
+    float res = fmodf(numer, denom);                                           \
+    CHECK_ERRNO(0);                                                            \
+    /* The tolerance check may not work for SUBNORMAL, NaN, etc., so check */  \
+    EXPECT_TRUE(fpclassify(res) == FP_NORMAL || fpclassify(res) == FP_ZERO);   \
+    EXPECT_LE(fabsf(expect - res), kToleranceF);                               \
+  } while (0)
+
+namespace {
+
+class FloatRemainderTests : public ::testing::Test {
+ protected:
+
+  FloatRemainderTests() {
+  }
+
+  ~FloatRemainderTests() override {
+  }
 
 
-#define CHECK_EQF(expect, numer, denom)                                 \
-  do {                                                                  \
-    float res = fmodf(numer, denom);                                    \
-    CHECK_ERRNO(0);                                                     \
-    /* The tolerance check may not work for SUBNORMAL, NaN, etc., so check */ \
-    if (!(fpclassify(res) == FP_NORMAL || fpclassify(res) == FP_ZERO)) { \
-      fprintf(stderr, "ERROR(%d): result is not normal/zero %f\n",      \
-              __LINE__, res);                                           \
-      err_count++;                                                      \
-    }                                                                   \
-    if (fabsf(expect - res) > kToleranceF) {                            \
-      fprintf(stderr, "ERROR: %f modf %f == %f, != %f\n",               \
-              numer, denom, res, expect);                               \
-      err_count++;                                                      \
-    }                                                                   \
-  } while(0)
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
 
 
-int main(void) {
+TEST_F(FloatRemainderTests, TestRemainder) {
   /* Set up some volatile constants to block the optimizer. */
   volatile double zero = 0.0;
   volatile double nan = NAN;
   volatile double two = 2.0;
   volatile double onesix = 1.6;
   volatile double infinity = INFINITY;
-  int err_count = 0;
-#if defined(TEST_LLVM_IR)
-  /* With the LLVM IR frem instruction, errno is never set
-   * (see the PNaCl bitcode ABI documentation).
-   */
   int expected_errno_infinity = 0;
   int expected_errno_zerodiv = 0;
-#elif defined(__GLIBC__) && __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 10
-  /*
-   * The older (pre 2.10) glibc and newlib don't set errno when x is infinity.
-   * See "BUGS" under the fmod manpage. It only sets errno for divide by zero.
-   */
-  int expected_errno_infinity = EDOM;
-  int expected_errno_zerodiv = EDOM;
-#else
-  int expected_errno_infinity = 0;
-  int expected_errno_zerodiv = EDOM;
-#endif
 
   /* Initialize errno to something predictable. */
   errno = 0;
@@ -211,7 +174,4 @@ int main(void) {
 
   CHECK_EQ(-5.2, -5.2, infinity);
   CHECK_EQF(-5.2f, -5.2f, (float)infinity);
-
-  fprintf(stderr, "Total of %d errors\n", err_count);
-  return err_count;
 }
