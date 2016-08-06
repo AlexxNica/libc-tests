@@ -5,8 +5,32 @@
  */
 
 #include <stdlib.h>
+#include "gtest/gtest.h"
 
-int main(void) {
+namespace {
+
+class BigAllocTests : public ::testing::Test {
+ protected:
+
+  BigAllocTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~BigAllocTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+TEST_F(BigAllocTests, TestBigAlloc) {
   void *buf = malloc(128 << 20);
-  return buf == NULL;
+  ASSERT_NE(buf, nullptr);
+  free(buf);
 }

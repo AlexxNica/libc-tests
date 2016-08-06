@@ -7,6 +7,7 @@ executable("libc-tests") {
     "main.cc",
   ]
   deps = [
+    "third_party/nacl-ported-tests/bigalloc:small_tests",
     "third_party/nacl-ported-tests/math:small_tests",
     "third_party/nacl-ported-tests/stdargs:small_tests",
     "third_party/nacl-ported-tests/syscalls:small_tests",
