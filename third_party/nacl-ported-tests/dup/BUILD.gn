@@ -1,0 +1,14 @@
+# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# TODO: add support to check output
+
+source_set("small_tests") {
+  sources = [
+    "dup_test.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}

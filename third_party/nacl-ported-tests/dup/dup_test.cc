@@ -10,38 +10,57 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include "gtest/gtest.h"
 
-int main(void) {
+namespace {
+
+class DupTests : public ::testing::Test {
+ protected:
+
+  DupTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~DupTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+
+TEST_F(DupTests, TestDup) {
   FILE  *alt;
-  char  buf[1024];
+  // char  buf[1024];
   int   rv;
 
-  printf("Hello world (1)\n");
   fflush(NULL);
-  if (-1 == (rv = dup(1))) {
-    fprintf(stderr, "dup(1) returned unexpected result: %d\n", rv);
-  }
+  EXPECT_NE(-1, (rv = dup(1)));
   alt = fdopen(rv, "w");
   fprintf(alt, "Hello world (dup)\n");
   fflush(NULL);
   fclose(alt);
-  if (3 != (rv = dup2(0, 3))) {
-    fprintf(stderr, "dup2(0, 3) returned unexpected result: %d\n", rv);
-  }
-  alt = fdopen(3, "r");
-  printf("%s", fgets(buf, sizeof buf, alt));
-  fclose(alt);
-  if (3 != (rv = dup2(1, 3))) {
-    fprintf(stderr, "dup2(1, 3) returned unexpected result: %d\n", rv);
-  }
+  EXPECT_EQ(3, (rv = dup2(0, 3)));
+
+  // TODO : support gets in tests
+  // alt = fdopen(3, "r");
+  // printf("%s", fgets(buf, sizeof buf, alt));
+  // fclose(alt);
+
+  EXPECT_EQ(3, dup2(1, 3));
   alt = fdopen(3, "w");
   fprintf(alt, "Good bye cruel world! dup2(1, 3)\n");
   fclose(alt);
-  if (20 != (rv = dup2(1, 20))) {
-    fprintf(stderr, "dup2(1, 3) returned unexpected result: %d\n", rv);
-  }
+  EXPECT_EQ(20, dup2(1, 20));
   alt = fdopen(20, "w");
   fprintf(alt, "Good bye cruel world! dup2(1, 20)\n");
   fclose(alt);
-  return 0;
 }
