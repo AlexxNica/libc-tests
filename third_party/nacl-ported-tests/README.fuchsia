@@ -1,0 +1,13 @@
+Name: Nacl Tests
+URL: https://chromium.googlesource.com/native_client/src/native_client.git/+/master/tests/
+Commit: d8b6edffa1a2eb3db8d24deaad71969b0f437aef
+License: 3-clause BSD
+
+Description:
+These are the tests which were written to test the Nacl/Pnacl sandbox.
+
+Update:
+- Added BUILD.gn files to build the tests using gn/ninja combination
+- Ported test files to gtest frameowrk
+- Remove all tests pertaining to only Nacl functionality
+
