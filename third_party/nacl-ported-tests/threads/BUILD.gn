@@ -4,6 +4,8 @@
 
 source_set("small_tests_broken") {
   sources = [
+    "cond_timedwait.cc",
+
     # Disable this to run other broken tests as this kills gtests
     "cond_wait_test.cc",
   ]
