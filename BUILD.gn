@@ -23,6 +23,7 @@ executable("tests") {
     "third_party/nacl-ported-tests/dup:small_tests",
     "third_party/nacl-ported-tests/fdopen_test:small_tests",
     "third_party/nacl-ported-tests/libc:small_tests",
+    "third_party/nacl-ported-tests/longjmp:small_tests",
     "third_party/nacl-ported-tests/math:small_tests",
     "third_party/nacl-ported-tests/nanosleep:small_tests",
     "third_party/nacl-ported-tests/sleep:small_tests",

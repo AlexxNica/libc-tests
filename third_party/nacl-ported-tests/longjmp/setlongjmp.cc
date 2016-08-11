@@ -4,14 +4,31 @@
  * found in the LICENSE file.
  */
 
+#include "gtest/gtest.h"
 #include <setjmp.h>
 #include <stdio.h>
 
-#include "native_client/src/include/nacl_assert.h"
+namespace {
+
+class SetLongJmpTests : public ::testing::TestWithParam<int> {
+protected:
+  SetLongJmpTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~SetLongJmpTests() override {}
+
+  void SetUp() override {}
+
+  void TearDown() override {}
+};
+
+} // namespace
 
 static jmp_buf buf;
 
-int trysetjmp(int longjmp_arg) {
+TEST_P(SetLongJmpTests, TestSetLongJmp) {
+  int longjmp_arg = GetParam();
   volatile int result = -1;
   int setjmp_ret = -1;
 
@@ -21,22 +38,13 @@ int trysetjmp(int longjmp_arg) {
     ASSERT_EQ(result, -1);
 
     result = 55;
-    printf("setjmp was invoked\n");
     longjmp(buf, longjmp_arg);
-    printf("this print statement is not reached\n");
-    return -1;
+    ASSERT_TRUE(false) << "this statement should not be reached";
   } else {
     int expected_ret = longjmp_arg != 0 ? longjmp_arg : 1;
     ASSERT_EQ(setjmp_ret, expected_ret);
-    printf("longjmp was invoked\n");
-    return result;
   }
 }
 
-int main(void) {
-  if (trysetjmp(1) != 55 ||
-      trysetjmp(0) != 55 ||
-      trysetjmp(-1) != 55)
-    return -1;
-  return 55;
-}
+INSTANTIATE_TEST_CASE_P(SetLongJmp, SetLongJmpTests,
+                        ::testing::Values(1, 0, -1));

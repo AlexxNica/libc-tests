@@ -1,0 +1,30 @@
+# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+source_set("small_tests") {
+  sources = [
+    "longjmp.cc",
+
+    #TODO: write asm for arm64 and x86_64 for
+    #longjmp_float.cc and include it in tests
+    "setlongjmp.cc",
+  ]
+  deps = [
+    ":slackslotstest",
+    "//third_party/gtest",
+  ]
+}
+
+source_set("slackslotstest") {
+  cflags_cc = [ "-O1" ]
+  if (is_debug) {
+    configs -= [ "//build/config:debug" ]
+  }
+  sources = [
+    "longjmp_stackslots_test.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}
