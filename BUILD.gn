@@ -24,3 +24,13 @@ executable("libc-tests-broken") {
     "//third_party/gtest",
   ]
 }
+
+executable("libc-large-tests") {
+  sources = [
+    "main.cc",
+  ]
+  deps = [
+    "third_party/nacl-ported-tests/threads:large_tests",
+    "//third_party/gtest",
+  ]
+}

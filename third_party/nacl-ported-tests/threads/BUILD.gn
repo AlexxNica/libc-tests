@@ -11,3 +11,12 @@ source_set("small_tests_broken") {
     "//third_party/gtest",
   ]
 }
+
+source_set("large_tests") {
+  sources = [
+    "many_threads_sequential.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}
