@@ -9,6 +9,7 @@
  * Also this checks whether joining with main thread is working.
  */
 
+//TODO : port this when we supprot DEATH tests
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
