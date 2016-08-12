@@ -6,6 +6,31 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#include "gtest/gtest.h"
+
+namespace {
+
+class CondWaitTests : public ::testing::Test {
+ protected:
+  CondWaitTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~CondWaitTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
 struct ConditionPair {
   pthread_mutex_t* mutex;
   pthread_cond_t* condition;
@@ -20,8 +45,7 @@ void* lockingThread(void* data) {
   return 0;
 }
 
-int main(int argc, char** argv) {
-  // http://code.google.com/p/nativeclient/issues/detail?id=1177
+TEST_F(CondWaitTests, TestCondWait){
   // This test checks that pthread_cond_wait correctly interacts with the mutex
   // error checking state.
   pthread_mutex_t mutex;
@@ -41,10 +65,5 @@ int main(int argc, char** argv) {
   pthread_create(&thread, NULL, lockingThread, (void*) &pair);
 
   pthread_cond_wait(&condition, &mutex); // releases mutex
-  // Mutex should be held when pthread_cond_returns
-  // And it turns out it is, but if we're using PTHREAD_MUTEX_ERRORCHECK
-  // the pthread_mutex_unlock code gets confused and returns EPERM. :(
-  int rc = pthread_mutex_unlock(&mutex);
-  printf("pthread_mutex_unlock return: %i (should be 0)\n", rc);
-  return rc;
+  EXPECT_EQ(0, pthread_mutex_unlock(&mutex));
 }
