@@ -7,34 +7,44 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+#include "gtest/gtest.h"
 
-int main(void) {
- int i;
+namespace {
 
+class MutexLeakTests : public ::testing::Test {
+ protected:
+  MutexLeakTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~MutexLeakTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+TEST_F(MutexLeakTests, TestMutexLeak) {
  int avail_fd = dup(2);
  close(avail_fd);
 
- for (i = 0; i < 10; i++) {
+ for (int i = 0; i < 10; i++) {
    pthread_mutex_t mutex;
-   int error = pthread_mutex_init(&mutex, NULL);
-   if (error != 0) {
-     fprintf(stderr, "Unable to create mutex, error %d", error);
-     return 1;
-   }
-   error = pthread_mutex_destroy(&mutex);
-   if (error != 0) {
-     fprintf(stderr, "Unable to destroy mutex, error %d", error);
-     return 1;
-   }
+   ASSERT_EQ(0, pthread_mutex_init(&mutex, NULL)) << "Unable to create mutex";
+   ASSERT_EQ(0, pthread_mutex_destroy(&mutex)) << "Unable to destroy mutex";
  }
 
  int next_fd = dup(2);
- if (next_fd != avail_fd) {
-   fprintf(stderr, "Leaked %d descriptors!\n", next_fd - avail_fd);
-   return 1;
- }
+ ASSERT_EQ(next_fd, avail_fd) << "Leaked descriptors!";
 
  close(next_fd);
 
- return 0;
 }
