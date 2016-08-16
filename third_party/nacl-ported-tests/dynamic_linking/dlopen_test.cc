@@ -4,31 +4,65 @@
  * found in the LICENSE file.
  */
 
-#include <assert.h>
 #include <dlfcn.h>
-#include <time.h>
+#include <threads.h>
 
-typedef time_t (*time_func_t)(time_t*);
+#include "gtest/gtest.h"
+
+namespace {
+
+class DlOpenTests : public ::testing::Test {
+ protected:
+
+  DlOpenTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~DlOpenTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+typedef void (*call_once_t)(once_flag*, void (*func)(void));
 
 /*
  * This union is required only to convert void* to function pointer. ISO C does
  * not provide such a conversion.
  */
 typedef union {
-  time_func_t pfunc;
+  call_once_t pfunc;
   void* pvoid;
 } dl_union;
 
-int main(void) {
+static int test_val;
+
+void do_work(void) {
+  test_val = 2;
+}
+
+TEST_F(DlOpenTests, TestDlOpen) {
   void *handle;
   dl_union f;
 
-  handle = dlopen("libstdc++.so.6", RTLD_LAZY);
-  assert(NULL != handle);
+  handle = dlopen("libc++.so.2", RTLD_LAZY);
+  ASSERT_NE(nullptr, handle);
   dlerror();
-  f.pvoid = dlsym(handle, "__atomic_flag_for_address");
-  assert(NULL == dlerror());
-  assert(-1 != (*f.pfunc)(NULL));
-  assert(0 == dlclose(handle));
-  return 0;
+  f.pvoid = dlsym(handle, "call_once");
+  char *err = dlerror();
+  ASSERT_EQ(nullptr, err) << err;
+  once_flag flag;
+  test_val = 1;
+  (*f.pfunc)(&flag, do_work);
+  EXPECT_EQ(2, test_val) << "do_work should have assigned it 2.";
+  ASSERT_EQ(0, dlclose(handle));
 }

@@ -21,6 +21,7 @@ executable("tests") {
     "third_party/nacl-ported-tests/abi:small_tests",
     "third_party/nacl-ported-tests/bigalloc:small_tests",
     "third_party/nacl-ported-tests/dup:small_tests",
+    "third_party/nacl-ported-tests/dynamic_linking:small_tests",
     "third_party/nacl-ported-tests/fdopen_test:small_tests",
     "third_party/nacl-ported-tests/libc:small_tests",
     "third_party/nacl-ported-tests/longjmp:small_tests",
