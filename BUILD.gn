@@ -16,6 +16,7 @@ executable("libc-tests") {
     "third_party/nacl-ported-tests/sleep:small_tests",
     "third_party/nacl-ported-tests/stdargs:small_tests",
     "third_party/nacl-ported-tests/syscalls:small_tests",
+    "third_party/nacl-ported-tests/tls:small_tests",
     "//third_party/gtest",
   ]
 }

@@ -1,0 +1,72 @@
+# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+defines_list = [
+  [
+    "Tdata1",
+    "WITH_PTHREAD",
+  ],
+  [
+    "Tdata2",
+    "MORE_TDATA",
+    "WITH_PTHREAD",
+  ],
+  [
+    "Tbss1",
+    "WITH_TBSS",
+    "WITH_PTHREAD",
+  ],
+  [
+    "Tbss2",
+    "WITH_TBSS",
+    "MORE_TBSS",
+    "WITH_PTHREAD",
+  ],
+  [
+    "Tbss3",
+    "WITH_TBSS",
+    "MORE_TDATA",
+    "WITH_PTHREAD",
+  ],
+  [
+    "LargeAlign",
+    "TDATA_LARGE_ALIGN",
+    "TBSS_LARGE_ALIGN",
+    "WITH_PTHREAD",
+  ],
+  [
+    "NoPthread",
+    "WITH_TBSS",
+    "TDATA_LARGE_ALIGN",
+    "TBSS_LARGE_ALIGN",
+  ],
+]
+
+source_set("small_tests") {
+  deps = []
+  foreach(casename_defines, defines_list) {
+    case_name = casename_defines[0]
+    deps += [ ":test_" + case_name ]
+  }
+}
+
+foreach(casename_defines, defines_list) {
+  case_name = casename_defines[0]
+  casename_defines -= [ case_name ]
+  source_set("test_" + case_name) {
+    cflags_cc = [
+      "-DTEST_NAME=Tls" + case_name + "Tests",
+      "-DTESTCASE_NAME=TestTls" + case_name,
+    ]
+    sources = [
+      "tls.cc",
+    ]
+    deps = [
+      "//third_party/gtest",
+    ]
+    foreach(defines, casename_defines) {
+      cflags_cc += [ "-D" + defines ]
+    }
+  }
+}

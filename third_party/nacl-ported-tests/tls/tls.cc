@@ -9,86 +9,100 @@
 #endif
 #include <stdint.h>
 #include <stdio.h>
+#include "gtest/gtest.h"
 
-#include "native_client/src/include/nacl_assert.h"
+namespace {
 
-__thread int tdata1 = 1;
-__thread int tdata2 __attribute__((aligned(0x10))) = 2;
+class TEST_NAME : public ::testing::Test {
+ protected:
+  volatile int dummy = 1;
+  TEST_NAME() {
+    // You can do set-up work for each test here.
+  }
+
+  ~TEST_NAME() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+__thread static int tdata1 = 1;
+__thread static int tdata2 __attribute__((aligned(0x10))) = 2;
 /* We need to test the case when TLS size is not aligned to 16 bytes. */
 #ifdef MORE_TDATA
-__thread int tdata_more = 3;
+__thread static int tdata_more = 3;
 #endif
 #ifdef TDATA_LARGE_ALIGN
-__thread int tdata3 __attribute__((aligned(0x1000))) = 4;
+__thread static int tdata3 __attribute__((aligned(0x1000))) = 4;
 #endif
 #ifdef WITH_TBSS
-__thread int tbss1;
-__thread int tbss2 __attribute__((aligned(0x10)));
+__thread static int tbss1;
+__thread static int tbss2 __attribute__((aligned(0x10)));
 /* If tdata and tbss are aligned separately, we need to check different tbss
    sizes too. */
 # ifdef MORE_TBSS
-__thread int tbss_more;
+__thread static int tbss_more;
 # endif
 # ifdef TBSS_LARGE_ALIGN
-__thread int tbss3 __attribute__((aligned(0x1000)));
+__thread static int tbss3 __attribute__((aligned(0x1000)));
 # endif
 #endif
 
 #ifdef WITH_PTHREAD
-void *thread_proc(void *arg) {
+static void *thread_proc(void *arg) {
   return arg;
 }
 #endif
 
-int __attribute__((noinline)) AlignCheck(void *address, int align) {
-  if ((uintptr_t) address % align != 0) {
-    fprintf(stderr, "Address %p is not aligned to a multiple of %i\n",
-            address, align);
-    return 1;
-  }
-  return 0;
+static void __attribute__((noinline)) AlignCheck(void *address, int align) {
+  EXPECT_EQ((uintptr_t) address % align, 0ul)
+      << "Address " << address << " is not aligned to a multiple of "
+      << align;
 }
 
-int main(int argc, char *argv[]) {
-  int errors = 0;
+TEST_F(TEST_NAME, TESTCASE_NAME) {
 #ifdef WITH_PTHREAD
   pthread_t tid;
 #endif
-  if (tdata1 != 1 || tdata2 != 2) {
-    errors++;
-  }
-  errors += AlignCheck(&tdata2, 0x10);
+  EXPECT_EQ(tdata1, 1);
+  EXPECT_EQ(tdata2, 2);
+  AlignCheck(&tdata2, 0x10);
 #ifdef MORE_TDATA
-  if (tdata_more != 3) {
-    errors++;
-  }
+  EXPECT_EQ(tdata_more, 3);
 #endif
 #ifdef TDATA_LARGE_ALIGN
-  errors += AlignCheck(&tdata3, 0x1000);
+  AlignCheck(&tdata3, 0x1000);
 #endif
 
 #ifdef WITH_TBSS
-  errors += AlignCheck(&tbss2, 0x10);
+  AlignCheck(&tbss2, 0x10);
   ASSERT_EQ(tbss1, 0);
   ASSERT_EQ(tbss2, 0);
   tbss1 = 1;
   tbss2 = 2;
-  if (tbss1 != 1 || tbss2 != 2) {
-    errors++;
-  }
+  EXPECT_EQ(tbss1, 1);
+  EXPECT_EQ(tbss2, 2);
 # ifdef MORE_TBSS
   ASSERT_EQ(tbss_more, 0);
 # endif
 # ifdef TBSS_LARGE_ALIGN
   ASSERT_EQ(tbss3, 0);
-  errors += AlignCheck(&tbss3, 0x1000);
+  AlignCheck(&tbss3, 0x1000);
 # endif
 #endif
 #ifdef WITH_PTHREAD
   /* This is dead code but it makes linker use pthread library */
-  if (argc == -1) {
+  if (dummy == -1) {
     pthread_create(&tid, NULL, thread_proc, NULL);
   }
 #endif
-  return errors;
 }
