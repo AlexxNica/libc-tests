@@ -34,6 +34,7 @@ executable("libc-large-tests") {
     "main.cc",
   ]
   deps = [
+    "third_party/nacl-ported-tests/libc:large_tests",
     "third_party/nacl-ported-tests/threads:large_tests",
     "//third_party/gtest",
   ]

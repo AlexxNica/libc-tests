@@ -11,13 +11,39 @@
 #include <string.h>
 #include <time.h>
 
-#define WSIZE sizeof(uint32_t)
+#define WSIZE sizeof(uint64_t)
+
+#include "gtest/gtest.h"
+
+namespace {
+
+class MallocCallocReallocFreeTests : public ::testing::Test {
+ protected:
+
+  MallocCallocReallocFreeTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~MallocCallocReallocFreeTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
 
 /*
  * Generate a deterministic sequence of numbers.
  * Use the Hailstone sequence, just for fun.
  */
-uint32_t next_seq(uint32_t num) {
+uint64_t next_seq(uint64_t num) {
   if (num & 1) {
     return 3 * num + 1;
   } else {
@@ -32,29 +58,28 @@ uint32_t next_seq(uint32_t num) {
  * s1 <- (addr % 1000). s2 <- next_seq(s1). s3 <- next_seq(s2), etc...
  */
 void init_memory(void *addr, uint32_t numwords) {
-  assert(numwords >= 1);
-  uint32_t *wordaddr = (uint32_t*)addr;
+  ASSERT_GE(numwords, (uint32_t)1);
+  uint64_t *wordaddr = (uint64_t*)addr;
   wordaddr[0] = numwords;
-  for (int i = 1; i < numwords; i++) {
-    wordaddr[i] = (i == 1) ? ((uint32_t)addr % 1000)
+  for (uint32_t i = 1; i < numwords; i++) {
+    wordaddr[i] = (i == 1) ? (((uint64_t)addr) % 1000)
                            : next_seq(wordaddr[i - 1]);
   }
 }
 
 /* Verify that memory is initialized as expected from init_memory */
 void verify_memory(void *addr) {
-  assert(addr);
-  uint32_t *wordaddr = (uint32_t*)addr;
-  uint32_t numwords = wordaddr[0];
-  assert(numwords >= 1);
-  for (int i = 1; i < numwords; i++) {
-    if ((i == 1 && wordaddr[1] == ((uint32_t)addr % 1000)) ||
+  ASSERT_NE(addr, nullptr);
+  uint64_t *wordaddr = (uint64_t*)addr;
+  uint64_t numwords = wordaddr[0];
+  ASSERT_GE(numwords, (uint64_t)1);
+  for (uint32_t i = 1; i < numwords; i++) {
+    if ((i == 1 && wordaddr[1] == ((uint64_t)addr % 1000)) ||
         wordaddr[i] == next_seq(wordaddr[i - 1])) {
       /* Good! */
     } else {
-      printf("Memory verification error. Buffer starting at %p, index %u: %u\n",
-             addr, i, wordaddr[i]);
-      exit(1);
+      ASSERT_TRUE(false) << "Memory verification error. Buffer starting at "
+                         << addr <<", index " << i << ": " << wordaddr[i];
     }
   }
 }
@@ -67,8 +92,8 @@ typedef enum {
 } WhichAlloc;
 
 void run_allocation_test(WhichAlloc wa, uint32_t numallocs) {
-  void **table = calloc(numallocs, sizeof(void*));
-  for (int i = 0; i < numallocs; i++) {
+  void **table = (void **)calloc(numallocs, sizeof(void*));
+  for (uint32_t i = 0; i < numallocs; i++) {
     /* Random allocation size */
     uint32_t numwords = 1 + rand() % (2 << 15);
 
@@ -81,9 +106,8 @@ void run_allocation_test(WhichAlloc wa, uint32_t numallocs) {
     } else if (wa == USE_REALLOC) {
       addr = realloc(0, WSIZE * numwords);
     }
-    assert(addr);
+    ASSERT_NE(addr, nullptr);
     table[i] = addr;
-
     /* Initialize allocated memory */
     init_memory(addr, numwords);
   }
@@ -102,12 +126,12 @@ void run_allocation_test(WhichAlloc wa, uint32_t numallocs) {
   }
 
   /* When all was allocated, verify that all memory looks as expected */
-  for (int i = 0; i < numallocs; i++) {
+  for (uint32_t i = 0; i < numallocs; i++) {
     verify_memory(table[i]);
   }
 
   /* Finally, free all allocated memory */
-  for (int i = 0; i < numallocs; i++) {
+  for (uint i = 0; i < numallocs; i++) {
     free(table[i]);
   }
   free(table);
@@ -116,13 +140,8 @@ void run_allocation_test(WhichAlloc wa, uint32_t numallocs) {
 /* A volatile pointer to thwart optimizations in some tests */
 volatile void* volatile vaddr;
 
-int main(int argc, char **argv) {
+TEST_F(MallocCallocReallocFreeTests, TestMallocCallocReallocFree) {
   unsigned seed = time(0);
-
-  /* Allow overriding the seed from the command-line */
-  if (argc > 1) {
-    seed = atoi(argv[1]);
-  }
 
   srand(seed);
   printf("Random seed = %u\n", seed);
@@ -134,7 +153,7 @@ int main(int argc, char **argv) {
   const uint32_t NUMALLOCS = 20;
   const uint32_t NUMRUNS = 10;
 
-  for (int i = 0; i < NUMRUNS; i++) {
+  for (uint32_t i = 0; i < NUMRUNS; i++) {
     run_allocation_test(USE_MALLOC, NUMALLOCS);
     run_allocation_test(USE_CALLOC, NUMALLOCS);
     run_allocation_test(USE_REALLOC, NUMALLOCS);
@@ -145,10 +164,10 @@ int main(int argc, char **argv) {
    */
   uint32_t zero = 0;
   void *m = calloc(4, 1);
-  assert(memcmp(m, &zero, 4) == 0);
+  ASSERT_EQ(memcmp(m, &zero, 4), 0);
   free(m);
   m = calloc(1, 1);
-  assert(memcmp(m, &zero, 1) == 0);
+  ASSERT_EQ(memcmp(m, &zero, 1), 0);
   free(m);
 
   /*
@@ -165,7 +184,7 @@ int main(int argc, char **argv) {
   memcpy(m2, m, nwords * WSIZE);
 
   m = realloc(m, 3 * nwords * WSIZE);
-  assert(memcmp(m, m2, nwords * WSIZE) == 0);
+  ASSERT_EQ(memcmp(m, m2, nwords * WSIZE), 0);
   free(m);
   free(m2);
 
@@ -186,7 +205,5 @@ int main(int argc, char **argv) {
 
   vaddr = malloc(7);
   vaddr = realloc((void*)vaddr, 0);
-
-  return 0;
 }
 
