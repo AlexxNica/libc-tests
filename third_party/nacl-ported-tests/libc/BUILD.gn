@@ -1,6 +1,14 @@
 # Copyright 2016 The Fuchsia Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+source_set("small_tests") {
+  sources = [
+    "strtoll.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}
 
 source_set("large_tests") {
   sources = [

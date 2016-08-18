@@ -10,6 +10,7 @@ executable("libc-tests") {
     "third_party/nacl-ported-tests/abi:small_tests",
     "third_party/nacl-ported-tests/bigalloc:small_tests",
     "third_party/nacl-ported-tests/dup:small_tests",
+    "third_party/nacl-ported-tests/libc:small_tests",
     "third_party/nacl-ported-tests/math:small_tests",
     "third_party/nacl-ported-tests/sleep:small_tests",
     "third_party/nacl-ported-tests/stdargs:small_tests",

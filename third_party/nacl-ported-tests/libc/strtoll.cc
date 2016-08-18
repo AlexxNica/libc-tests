@@ -9,24 +9,55 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gtest/gtest.h"
+namespace {
 
-int test(const char *str, int64_t want, int base) {
+struct test_param {
+  const char *str;
+  int64_t want;
+  int base;
+};
+
+class StrTollTests : public ::testing::TestWithParam<struct test_param> {
+ protected:
+
+  StrTollTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~StrTollTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+TEST_P(StrTollTests, TestStrToll) {
+  const struct test_param *params = &GetParam();
+  const char *str = params->str;
+  int64_t want = params->want;
+  int base = params->base;
   int64_t val;
   errno = 0; /* errno is undefined on success unless initialized */
   val = strtoll(str, 0, base);
-  if (errno != 0) {
-    fprintf(stderr, "strtoll(\"%s\", 0, %d): %s\n", str, base, strerror(errno));
-    return 1;
-  }
-  if (val == want)
-    return 0;
-  fprintf(stderr, "%lld != %lld\n", val, want);
-  return 1;
+  EXPECT_EQ(errno, 0) << "strtoll(" << str << ", 0, "
+                      << base << "):", strerror(errno);
+  ASSERT_EQ(val, want);
 }
 
-int main(void) {
-  int errors = 0;
-  errors += test("-5", -5, 10);
-  errors += test("7FFFFFFFFFFFFFFF", 0x7FFFFFFFFFFFFFFFLL, 16);
-  return errors;
-}
+struct test_param params[] = {
+    { "-5", -5, 10},
+    { "7FFFFFFFFFFFFFFF", 0x7FFFFFFFFFFFFFFFLL, 16}
+};
+
+INSTANTIATE_TEST_CASE_P(StrToll,
+                        StrTollTests,
+                        ::testing::ValuesIn(params));
+
