@@ -8,18 +8,41 @@
 #include <string.h>
 #include <time.h>
 
-#include "native_client/src/include/nacl_assert.h"
+#include "gtest/gtest.h"
+
+namespace {
+
+class TimezoneTests : public ::testing::TestWithParam<struct test_param> {
+ protected:
+
+  TimezoneTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~TimezoneTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
 
 /*
  * Test that the C library defines the variables timezone, daylight and
- * tzname.  This is a regression test for this issue with nacl-newlib:
- * https://bugs.chromium.org/p/nativeclient/issues/detail?id=3737
+ * tzname.
  *
  * Also test that tzset() sets these variables correctly based on the "TZ"
  * environment variable.
  */
 
-int main(void) {
+TEST_F(TimezoneTests, TestTimezone) {
   int rc = setenv("TZ", "BLAH+5:30", 1);
   ASSERT_EQ(rc, 0);
 
@@ -29,6 +52,4 @@ int main(void) {
   ASSERT_EQ(daylight, 0);
   ASSERT_EQ(strcmp(tzname[0], "BLAH"), 0);
   ASSERT_EQ(strcmp(tzname[1], "BLAH"), 0);
-
-  return 0;
 }

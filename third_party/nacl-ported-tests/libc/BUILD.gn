@@ -20,3 +20,12 @@ source_set("large_tests") {
     "//third_party/gtest",
   ]
 }
+
+source_set("small_tests_broken") {
+  sources = [
+    "timezone.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}
