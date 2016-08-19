@@ -7,20 +7,40 @@
 #include <stdio.h>
 #include <wchar.h>
 
-int main(void) {
-  wchar_t *wcs;
+#include "gtest/gtest.h"
+
+namespace {
+
+class WcsTollTests : public ::testing::Test {
+ protected:
+
+  WcsTollTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~WcsTollTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+
+
+TEST_F(WcsTollTests, TestWcsToll) {
+  const wchar_t *wcs;
   wchar_t *stopwcs;
   long long val;
 
   wcs = L"1234567890123456789";
-  printf("wcs = `%ls`\n", wcs);
   val = wcstoll(wcs, &stopwcs, 10);
   printf("wcstoll = %lld\n", val);
   printf("Stopped scan at `%ls`\n", stopwcs);
-  if (val != 1234567890123456789LL) {
-    printf("Wrong answer\n");
-    return 1;
-  }
-  printf("OK\n");
-  return 0;
+  EXPECT_EQ(val, 1234567890123456789LL);
 }

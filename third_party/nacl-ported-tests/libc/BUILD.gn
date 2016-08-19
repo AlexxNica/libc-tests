@@ -5,6 +5,7 @@ source_set("small_tests") {
   sources = [
     "strtoll.cc",
     "strtoull.cc",
+    "wcstoll.cc",
   ]
   deps = [
     "//third_party/gtest",
