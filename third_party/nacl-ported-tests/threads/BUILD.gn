@@ -12,7 +12,7 @@ source_set("small_tests_broken") {
   ]
 }
 
-source_set("large_tests") {
+source_set("large_tests_broken") {
   sources = [
     "many_threads_sequential.cc",
   ]

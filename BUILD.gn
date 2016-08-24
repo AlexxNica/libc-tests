@@ -2,7 +2,18 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-executable("libc-tests") {
+group("libc-tests") {
+  testonly = true
+  deps = [
+    ":tests",
+    ":libc-tests-broken",
+    ":libc-large-tests",
+  ]
+}
+
+executable("tests") {
+  output_name = "libc-tests"
+  testonly = true
   sources = [
     "main.cc",
   ]
@@ -22,24 +33,26 @@ executable("libc-tests") {
 }
 
 executable("libc-tests-broken") {
+  testonly = true
   sources = [
     "main.cc",
   ]
   deps = [
     "third_party/nacl-ported-tests/libc:small_tests_broken",
     "third_party/nacl-ported-tests/syscalls:small_tests_broken",
+    "third_party/nacl-ported-tests/threads:large_tests_broken",
     "third_party/nacl-ported-tests/threads:small_tests_broken",
     "//third_party/gtest",
   ]
 }
 
 executable("libc-large-tests") {
+  testonly = true
   sources = [
     "main.cc",
   ]
   deps = [
     "third_party/nacl-ported-tests/libc:large_tests",
-    "third_party/nacl-ported-tests/threads:large_tests",
     "//third_party/gtest",
   ]
 }
