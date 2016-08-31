@@ -4,7 +4,6 @@
  * found in the LICENSE file.
  */
 
-#include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,18 +11,42 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "gtest/gtest.h"
 
-int main(int argc, char *argv[]) {
-  assert(argc == 2);
-  int fd = open(argv[1], O_RDONLY);
-  assert(fd > 0);
+namespace {
+
+class FdOpenTests : public ::testing::Test {
+ protected:
+
+  FdOpenTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~FdOpenTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+extern char *testdata_dir;
+
+TEST_F(FdOpenTests, TestFdOpen) {
+  const char* test_filename = strcat(testdata_dir, "/fdopen_testdata");
+  int fd = open(test_filename, O_RDONLY);
+  ASSERT_GT(fd, 0);
   FILE *file = fdopen(fd, "r");
-  assert(fd == fileno(file));
+  ASSERT_EQ(fd, fileno(file));
   char buf[100];
-  int count = fread(buf, 1, sizeof buf, file);
+  size_t count = fread(buf, 1, sizeof buf, file);
   const char expected[] = "Testing Data!";
-  assert(count == strlen(expected));
-  assert(memcmp(buf, "Testing Data!", count) == 0);
+  ASSERT_EQ(count, strlen(expected));
+  ASSERT_EQ(memcmp(buf, "Testing Data!", count), 0);
   fclose(file);
-  return 0;
 }

@@ -5,9 +5,9 @@
 group("libc-tests") {
   testonly = true
   deps = [
-    ":tests",
-    ":libc-tests-broken",
     ":libc-large-tests",
+    ":libc-tests-broken",
+    ":tests",
   ]
 }
 
@@ -21,6 +21,7 @@ executable("tests") {
     "third_party/nacl-ported-tests/abi:small_tests",
     "third_party/nacl-ported-tests/bigalloc:small_tests",
     "third_party/nacl-ported-tests/dup:small_tests",
+    "third_party/nacl-ported-tests/fdopen_test:small_tests",
     "third_party/nacl-ported-tests/libc:small_tests",
     "third_party/nacl-ported-tests/math:small_tests",
     "third_party/nacl-ported-tests/nanosleep:small_tests",
