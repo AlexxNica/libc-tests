@@ -4,21 +4,33 @@
  * found in the LICENSE file.
  */
 
-#include "native_client/src/include/nacl_assert.h"
-
-#ifdef _NEWLIB_VERSION
-#include <stdint.h>
-uint32_t htonl(uint32_t hostlong);
-uint16_t htons(uint16_t hostshort);
-uint32_t ntohl(uint32_t netlong);
-uint16_t ntohs(uint16_t netshort);
-#else
 #include <arpa/inet.h>
-#endif
+#include "gtest/gtest.h"
 
-int main(void) {
+namespace {
+class InetTests : public ::testing::Test {
+ protected:
+
+  InetTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~InetTests() override {
+  }
+
+
+  void SetUp() override {
+  }
+
+  void TearDown() override {
+  }
+};
+
+} //namespace
+
+TEST_F(InetTests, TestInet) {
   /*
-   * NaCl is always little-endian, and network order is big-endian
+   * System is always little-endian, and network order is big-endian
    * so ntohl(3) and friends are always expected to reverse the
    * byte order.
    */
@@ -32,6 +44,4 @@ int main(void) {
 
   ASSERT_EQ(hostshort, ntohs(netshort));
   ASSERT_EQ(netshort, htons(hostshort));
-
-  return 0;
 }

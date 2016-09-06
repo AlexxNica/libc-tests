@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 source_set("small_tests") {
   sources = [
+    "inet.cc",
     "memcpy_move_set.cc",
     "posix_memalign.cc",
     "strtoll.cc",
