@@ -4,24 +4,42 @@
  * found in the LICENSE file.
  */
 
+#include "gtest/gtest.h"
 #include <math.h>
 #include <stdio.h>
 
+namespace {
+
+class CPowTests : public ::testing::Test {
+protected:
+  CPowTests() {
+    // You can do set-up work for each test here.
+  }
+
+  ~CPowTests() override {}
+
+  void SetUp() override {}
+
+  void TearDown() override {}
+};
+
+} // namespace
+
 /* Picking a base that can be represented exactly in FP, even when squared */
-volatile float fnum_base = 4.125;
-volatile float fnum_two = 2.0;
-volatile int inum_two = 2;
+static volatile float fnum_base = 4.125;
+static volatile float fnum_two = 2.0;
+static volatile int inum_two = 2;
 
-volatile double dnum_base = 16.5;
-volatile double dnum_two = 2.0;
+static volatile double dnum_base = 16.5;
+static volatile double dnum_two = 2.0;
 
-int main(void) {
-  printf("%f\n", pow(fnum_base, fnum_two));
-  printf("%f\n", pow(fnum_base, inum_two));
-
+TEST_F(CPowTests, TestPow) {
+  EXPECT_EQ(17.015625, pow(fnum_base, fnum_two));
+  EXPECT_EQ(17.015625, pow(fnum_base, inum_two));
+  char output[10];
   /* Only 2 digits after the dot are needed, but avoid appending 0s */
-  printf("%.2f\n", pow(dnum_base, dnum_two));
-  printf("%.2f\n", pow(dnum_base, inum_two));
-
-  return 0;
+  sprintf(output, "%.2f", pow(dnum_base, dnum_two));
+  EXPECT_STREQ("272.25", output);
+  sprintf(output, "%.2f", pow(dnum_base, inum_two));
+  EXPECT_STREQ("272.25", output);
 }

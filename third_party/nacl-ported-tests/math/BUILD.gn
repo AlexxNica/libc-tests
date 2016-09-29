@@ -4,6 +4,8 @@
 
 source_set("small_tests") {
   sources = [
+    "c_pow.cc",
+    "cxx_pow.cc",
     "float.cc",
     "float_math.cc",
     "float_remainder.cc",
