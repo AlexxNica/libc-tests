@@ -12,6 +12,7 @@ source_set("small_tests") {
     "float_math.cc",
     "float_remainder.cc",
     "misc_math.cc",
+    "sincos_test.cc",
   ]
   deps = [
     "//third_party/gtest",

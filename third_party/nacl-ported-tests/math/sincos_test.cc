@@ -7,11 +7,40 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "gtest/gtest.h"
 
 void sincos(double a, double *s, double *c);
 void sincosf(float a, float *s, float *c);
 
-int TestSinCosD(double a) {
+template <typename T>
+std::vector<T> generate_params() {
+  std::vector<T> input;
+  const double pi = 3.14159265;
+  const double fourpi = 4.0 * pi;
+  double a;
+
+  for (a = -fourpi; a < fourpi; a += pi / 8.0) {
+    input.push_back(a);
+  }
+  /* seed drand48() generator to make it deterministic. */
+  srand48(12345678);
+  if (std::is_same<T, double>::value) {
+    input.push_back(fourpi * (drand48() - 0.5));
+  } else {
+    input.push_back(drand48());
+  }
+  return input;
+}
+
+namespace {
+
+class SinCosDoubleTests : public ::testing::TestWithParam<double> {};
+class SinCosFloatTests : public ::testing::TestWithParam<float> {};
+
+}  // namespace
+
+TEST_P(SinCosDoubleTests, TestSinCos) {
+  double a = GetParam();
   const double maxerr = 0.000000000001;
   double sincos_sin, sincos_cos, sin_sin, cos_cos;
 
@@ -20,15 +49,20 @@ int TestSinCosD(double a) {
   cos_cos = cos(a);
   if (fabs(sincos_sin - sin_sin) > maxerr ||
       fabs(sincos_cos - cos_cos) > maxerr) {
-    printf("sincosf(%12.12f) outside tolerance: sin:%12.12f, cos:%12.12f\n",
-            a, sincos_sin - sin_sin, sincos_cos - cos_cos);
-    return 1;
-  } else {
-    return 0;
+    char fail_msg[256];
+    sprintf(fail_msg,
+            "sincosf(%12.12f) outside tolerance: sin:%12.12f, cos:%12.12f\n", a,
+            sincos_sin - sin_sin, sincos_cos - cos_cos);
+    FAIL() << fail_msg;
   }
 }
 
-int TestSinCosF(float a) {
+INSTANTIATE_TEST_CASE_P(SinCosD,
+                        SinCosDoubleTests,
+                        ::testing::ValuesIn(generate_params<double>()));
+
+TEST_P(SinCosFloatTests, TestSinCos) {
+  float a = GetParam();
   const float maxerr = 0.000000000001;
   float sincos_sin, sincos_cos, sin_sin, cos_cos;
 
@@ -37,33 +71,14 @@ int TestSinCosF(float a) {
   cos_cos = cosf(a);
   if (fabsf(sincos_sin - sin_sin) > maxerr ||
       fabsf(sincos_cos - cos_cos) > maxerr) {
-    printf("sincosf(%12.12f) outside tolerance: sin:%12.12f, cos:%12.12f\n",
-            a, sincos_sin - sin_sin, sincos_cos - cos_cos);
-    return 1;
-  } else {
-    return 0;
-  }
+    char fail_msg[256];
+    sprintf(fail_msg,
+            "sincosf(%12.12f) outside tolerance: sin:%12.12f, cos:%12.12f\n", a,
+            sincos_sin - sin_sin, sincos_cos - cos_cos);
+    FAIL() << fail_msg;
+}
 }
 
-int main(int argc, char* argv[]) {
-  const double pi = 3.14159265;
-  const double fourpi = 4.0 * pi;
-  double a;
-  int i;
-  int sawproblem = 0;
-
-  for (a = -fourpi; a < fourpi; a += pi / 8.0) {
-    sawproblem |= TestSinCosD(a);
-    sawproblem |= TestSinCosF(a);
-  }
-  /* seed drand48() generator to make it deterministic. */
-  srand48(12345678);
-  for (i = 0; i < 100; i++) {
-    sawproblem |= TestSinCosD(fourpi * (drand48() - 0.5));
-    sawproblem |= TestSinCosF(drand48());
-  }
-  if (!sawproblem) {
-    printf("No problems!\n");
-  }
-  return 0;
-}
+INSTANTIATE_TEST_CASE_P(SinCosF,
+                        SinCosFloatTests,
+                        ::testing::ValuesIn(generate_params<float>()));
