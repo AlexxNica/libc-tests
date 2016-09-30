@@ -4,25 +4,49 @@
  * found in the LICENSE file.
  */
 
-/*
-   It can't get much simpler than this (uh, except for noop.c).
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
+#include "gtest/gtest.h"
 
-int main(int argc, char* argv[]) {
+namespace {
+
+class MathPrintfTests : public ::testing::Test {};
+
+}  // namespace
+
+static std::string expected_output =
+    R"(1000
+1000
+3e8
+0x000003e8
+
+1
+1
+1
+0x00000001
+
+0
+0
+0
+0x00000000
+
+)";
+
+const char* input[] = {"1000", "1", "0"};
+TEST_F(MathPrintfTests, Test) {
   int i;
 
-  for (i = 1; i < argc; ++i) {
+  testing::internal::CaptureStdout();
+  for (i = 0; i < 3; ++i) {
     long x;
-    printf("%s\n", argv[i]);
+    printf("%s\n", input[i]);
 
-    x = strtol(argv[i], 0, 0);
+    x = strtol(input[i], 0, 0);
     printf("%ld\n", x);
     printf("%lx\n", x);
     printf("0x%08lx\n", x);
     printf("\n");
   }
-  return 0;
+  std::string output = testing::internal::GetCapturedStdout();
+  EXPECT_EQ(expected_output, output);
 }

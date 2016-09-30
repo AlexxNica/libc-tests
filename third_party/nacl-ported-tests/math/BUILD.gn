@@ -11,6 +11,7 @@ source_set("small_tests") {
     "float.cc",
     "float_math.cc",
     "float_remainder.cc",
+    "math_printf.cc",
     "misc_math.cc",
     "sincos_test.cc",
   ]
