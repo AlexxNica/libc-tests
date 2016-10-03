@@ -10,7 +10,28 @@
 #include <stdio.h>
 #include <string.h>
 
-#define PRINT_HEADER 0
+#include "gtest/gtest.h"
+
+// TODO: Tests are broken as append mode is not working, fix it
+namespace {
+
+class FileTests : public ::testing::Test {
+ protected:
+
+  void SetUp() override {
+    // Remove test files from previous run
+    remove("testdata256");
+    remove("testdata.txt");
+  }
+
+  void TearDown() override {
+    remove("testdata256");
+    remove("testdata.txt");
+  }
+};
+
+}  // namespace
+
 #define TEXT_LINE_SIZE 1024
 
 
@@ -30,55 +51,27 @@ static const char *gText[] = {
 };
 
 
-
-/*
- * function failed(testname, msg)
- *   print failure message and exit with a return code of -1
- */
-
-bool failed(const char *testname, const char *msg) {
-  printf("TEST FAILED: %s: %s\n", testname, msg);
-  return false;
-}
-
-
-/*
- * function passed(testname, msg)
- *   print success message
- */
-
-bool passed(const char *testname, const char *msg) {
-  printf("TEST PASSED: %s: %s\n", testname, msg);
-  return true;
-}
-
-
 /*
  * function createBinaryTestData(testname)
  *   Create binary 'testdata256' file.
  *   This file contains bytes 0..255
  *   It is exactly 256 bytes in size.
- * returns true if test passed
  */
 
-bool fopen_createBinaryFile(const char *testname) {
-
+void fopen_createBinaryFile(const char* testname) {
   // create and write 0..255 into binary testdata file
 
   FILE *f = fopen("testdata256", "wb");
-  if (NULL == f) {
-    return failed(testname, "failed on fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "failed on fopen() for " << testname;
   for (int i = 0; i < 256; ++i) {
     unsigned char c = (unsigned char)i;
     size_t j = fwrite(&c, 1, 1, f);
     if (1 != j) {
       fclose(f);
-      return failed(testname, "can't fwrite(&c, 1, 1, f)");
+      ASSERT_TRUE(false) << "can't fwrite(&c, 1, 1, f) for " << testname;
     }
   }
   fclose(f);
-  return passed(testname, "fopen_createBinaryFile()");
 }
 
 
@@ -88,29 +81,24 @@ bool fopen_createBinaryFile(const char *testname) {
  *   Read is done byte at a time.
  *   The testdata256 file is exactly 256 bytes in length.
  *   We expect to find 0, 1, 2... 253, 254, 255.
- * returns true if test passed
  */
 
-bool fread_bytes(const char *testname, const char *filename) {
-
+void fread_bytes(const char* testname, const char* filename) {
   FILE *f = fopen(filename, "rb");
-  if (NULL == f) {
-    return failed(testname, "failed on fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "failed on fopen() for " << testname;
   for (int i = 0; i < 256; ++i) {
     unsigned char c;
     size_t j = fread(&c, 1, 1, f);
     if (1 != j) {
       fclose(f);
-      return failed(testname, "couldn't fread(&c, 1, 1, f)");
+      ASSERT_TRUE(false) << "couldn't fread(&c, 1, 1, f) for " << testname;
     }
     if (c != (unsigned char)i) {
       fclose(f);
-      return failed(testname, "read bytes don't match");
+      ASSERT_TRUE(false) << "read bytes don't match for " << testname;
     }
   }
   fclose(f);
-  return passed(testname, "fread(&c, 1, 1, f) x 256");
 }
 
 
@@ -118,21 +106,18 @@ bool fread_bytes(const char *testname, const char *filename) {
  * function fopen_fail(testname)
  *   Attempt to fopen a file that isn't there.
  *   This should fail(!)
- * returns true if test passed (fopen failed)
  */
 
-bool fopen_fail(const char *testname) {
-
+void fopen_fail(const char* testname) {
   FILE *f = fopen("noexist.abc", "rb");
 
   if (NULL != f) {
     fclose(f);
-    return failed(testname, "fopen() succeeded on non-existant file!");
+    ASSERT_TRUE(false) << "fopen() succeeded on non-existant file! for "
+                       << testname;
   }
-  if (errno != ENOENT) {
-    return failed(testname, "fopen() wrong error on non-existant file!");
-  }
-  return passed(testname, "fopen_fail() on non-existant file");
+  ASSERT_EQ(errno, ENOENT) << "fopen() wrong error on non-existant file! for "
+                           << testname;
 }
 
 
@@ -142,29 +127,21 @@ bool fopen_fail(const char *testname) {
  *   read as one 256x1 chunk
  *   The testdata256 file is exactly 256 bytes in length.
  *   We expect to find 0, 1, 2... 253, 254, 255.
- * returns true if test passed
  */
 
-bool fread_256x1_block(const char *testname) {
-
+void fread_256x1_block(const char* testname) {
   FILE *f = fopen("testdata256", "rb");
-  if (NULL == f) {
-    return failed(testname, "failed on fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "failed on fopen() for " << testname;
   unsigned char c[256];
   memset(c, 0, sizeof(unsigned char) * 256);
   // read as 256x1 chunk
   size_t j = fread(&c, 256, 1, f);
   fclose(f);
-  if (1 != j) {
-    return failed(testname, "couldn't fread(&c, 256, 1, f)");
-  }
+  ASSERT_EQ(1ul, j) << "couldn't fread(&c, 256, 1, f) for " << testname;
   for (int i = 0; i < 256; ++i) {
-    if (c[i] != (unsigned char)i) {
-      return failed(testname, "read bytes don't match");
-    }
+    ASSERT_EQ(c[i], (unsigned char)i) << "read bytes don't match for "
+                                      << testname;
   }
-  return passed(testname, "fread_256x1_block()");
 }
 
 
@@ -174,29 +151,21 @@ bool fread_256x1_block(const char *testname) {
  *   read as one 1x256 chunks
  *   The testdata256 file is exactly 256 bytes in length.
  *   We expect to find 0, 1, 2... 253, 254, 255.
- * returns true if test passed
  */
 
-bool fread_1x256_block(const char *testname) {
-
+void fread_1x256_block(const char* testname) {
   FILE *f = fopen("testdata256", "rb");
-  if (NULL == f) {
-    return failed(testname, "failed on fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "failed on fopen() for " << testname;
   unsigned char c[256];
   memset(c, 0, sizeof(unsigned char) * 256);
   // read as 1x256 chunk
   size_t j = fread(&c, 1, 256, f);
   fclose(f);
-  if (256 != j) {
-    return failed(testname, "couldn't fread(&c, 1, 256, f)");
-  }
+  ASSERT_EQ(256ul, j) << "couldn't fread(&c, 1, 256, f) for " << testname;
   for (int i = 0; i < 256; ++i) {
-    if (c[i] != (unsigned char)i) {
-      return failed(testname, "read bytes don't match");
-    }
+    ASSERT_EQ(c[i], (unsigned char)i) << "read bytes don't match for "
+                                      << testname;
   }
-  return passed(testname, "fread_1x256_block()");
 }
 
 
@@ -204,25 +173,21 @@ bool fread_1x256_block(const char *testname) {
  * function fopen_createTextFile(testname)
  *   create and write text file
  *   Uses 'gText' NULL terminated array to populate text file
- * returns true if test passed
  */
 
-bool fopen_createTextFile(const char *testname) {
-
+void fopen_createTextFile(const char* testname) {
   FILE *f = fopen("testdata.txt", "wt");
-  if (NULL == f) {
-    return failed(testname, "fopen() testdata.txt (wt)");
-  }
+  ASSERT_NE(nullptr, f) << "fopen() testdata.txt (wt) for " << testname;
 
   for (int i = 0; NULL != gText[i]; ++i) {
     int numWritten = fprintf(f, "%s", gText[i]);
     if (numWritten < 0) {
       fclose(f);
-      return failed(testname, "fprintf() returned a negative value.");
+      ASSERT_TRUE(false) << "fprintf() returned a negative value for "
+                         << testname;
     }
   }
   fclose(f);
-  return passed(testname, "fopen_createTextFile()");
 }
 
 
@@ -231,33 +196,27 @@ bool fopen_createTextFile(const char *testname) {
  *   Read and compare expected text from test file.
  *   The test file should contain the same text as
  *   the 'gText' NULL terminated array.
- * returns true if test passed
  */
 
-bool fgets_readText(const char *testname) {
-
+void fgets_readText(const char* testname) {
   FILE *f = fopen("testdata.txt", "rt");
-  if (NULL == f) {
-    return failed(testname, "Unable to open file");
-  }
+  ASSERT_NE(nullptr, f) << "Unable to open file for " << testname;
   char buffer[TEXT_LINE_SIZE];
   int index;
   memset(buffer, 0, sizeof(char) * TEXT_LINE_SIZE);
   for (index = 0; NULL != fgets(buffer, TEXT_LINE_SIZE - 1, f); ++index) {
     if (NULL == gText[index]) {
       fclose(f);
-      return failed(testname, "unexpected mismatch");
+      ASSERT_TRUE(false) << "unexpected mismatch for " << testname;
     }
     if (0 != strcmp(buffer, gText[index])) {
       fclose(f);
-      return failed(testname, "read text does not match");
+      ASSERT_TRUE(false) << "read text does not match for " << testname;
     }
   }
   fclose(f);
-  if (NULL != gText[index]) {
-    return failed(testname, "unexpected eof() encountered");
-  }
-  return passed(testname, "fgets_readText()");
+  ASSERT_EQ(nullptr, gText[index]) << "unexpected eof() encountered for "
+                                   << testname;
 }
 
 
@@ -265,28 +224,23 @@ bool fgets_readText(const char *testname) {
  * function fseek_filesize256(testname)
  *   Use fseek to determine expected filesize of test file filedata256.
  *   It is expected to be exactly 256 bytes in size.
- * returns true if test passed
  */
 
-bool fseek_filesize256(const char *testname) {
-
+void fseek_filesize256(const char* testname) {
   FILE *f = fopen("testdata256", "rb");
-  if (NULL == f) {
-    return failed(testname, "fopen failed");
-  }
+  ASSERT_NE(nullptr, f) << "fopen failed for " << testname;
   int x = fseek(f, 0, SEEK_END);
   if (0 == x) {
     int p = ftell(f);
     if (256 != p) {
       fclose(f);
-      return failed(testname, "ftell mismatch");
+      ASSERT_TRUE(false) << "ftell mismatch for " << testname;
     }
     fclose(f);
   } else {
     fclose(f);
-    return failed(testname, "fseek failed");
+    ASSERT_TRUE(false) << "fseek failed for " << testname;
   }
-  return passed(testname, "fseek_filesize256()");
 }
 
 
@@ -297,56 +251,55 @@ bool fseek_filesize256(const char *testname) {
  *   and consists of 0, 1, 2... 253, 254, 255.
  *   If we seek to the Nth byte, we expect to find
  *   the value N there.
- * returns true if test passed
  */
 
-bool fseek_simple_testdata256(const char *testname) {
-
+void fseek_simple_testdata256(const char* testname) {
   // test simple file seeking within testdata256
 
   FILE *f = fopen("testdata256", "rb");
-  if (NULL == f) {
-    return failed(testname, "fseek_simple_testdata256() could not fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "fseek_simple_testdata256() could not fopen() for "
+                        << testname;
 
   // seek to offset 1 from start of file
   int x = fseek(f, 1, SEEK_SET);
   if (x != 0) {
     fclose(f);
-    return failed(testname, "fseek(1, SEEK_SET) failed");
+    ASSERT_TRUE(false) << "fseek(1, SEEK_SET) failed for " << testname;
   }
   unsigned char c = 0;
   fread(&c, 1, 1, f);
   if (1 != c) {
     fclose(f);
-    return failed(testname, "fread(f, 1, 1, &c) at SEEK_SET+1 mismatch");
+    ASSERT_TRUE(false) << "fread(f, 1, 1, &c) at SEEK_SET+1 mismatch for "
+                       << testname;
   }
   x = fseek(f, -2, SEEK_END);
   if (0 != x) {
     fclose(f);
-    return failed(testname, "fseek(-1, SEEK_END) failed");
+    ASSERT_TRUE(false) << "fseek(-1, SEEK_END) failed for " << testname;
   }
   fread(&c, 1, 1, f);
   if (254 != c) {
     fclose(f);
-    return failed(testname, "fread(f, 1, 1, &c) at SEEK_END-1 mismatch");
+    ASSERT_TRUE(false) << "fread(f, 1, 1, &c) at SEEK_END-1 mismatch for "
+                       << testname;
   }
   x = fseek(f, 2, SEEK_SET);
   if (0 != x) {
     fclose(f);
-    return failed(testname, "fseek(2, SEEK_SET) failed");
+    ASSERT_TRUE(false) << "fseek(2, SEEK_SET) failed for " << testname;
   }
   x = fseek(f, 1, SEEK_CUR);
   if (0 != x) {
     fclose(f);
-    return failed(testname, "fseek(1, SEEK_CUR) failed");
+    ASSERT_TRUE(false) << "fseek(1, SEEK_CUR) failed for " << testname;
   }
   fread(&c, 1, 1, f);
   if (3 != c) {
     fclose(f);
-    return failed(testname, "fseek(f, 1, 1, &c) at SEEK_CUR+1 mismatch");
+    ASSERT_TRUE(false) << "fseek(f, 1, 1, &c) at SEEK_CUR+1 mismatch for "
+                       << testname;
   }
-  return passed(testname, "fseek_simple_testdata256()");
 }
 
 
@@ -354,11 +307,9 @@ bool fseek_simple_testdata256(const char *testname) {
  * function fgets_filesize(testname)
  *   Determine the length of a text file using fgets & strlen
  *   This value should match the length of gText[]
- * returns true if test passed
  */
 
-bool fgets_filesize(const char *testname) {
-
+void fgets_filesize(const char* testname) {
   size_t charcount = 0;
   size_t filecharcount = 0;
 
@@ -368,9 +319,8 @@ bool fgets_filesize(const char *testname) {
   }
 
   FILE *f = fopen("testdata.txt", "r");
-  if (NULL == f) {
-    return failed(testname, "fgets_filesize() failed on fopen()");
-  }
+  ASSERT_NE(nullptr, f) << "fgets_filesize() failed on fopen() for "
+                        << testname;
 
   char buffer[TEXT_LINE_SIZE];
   memset(buffer, 0, sizeof(char) * TEXT_LINE_SIZE);
@@ -379,11 +329,8 @@ bool fgets_filesize(const char *testname) {
   }
   fclose(f);
 
-  if (charcount != filecharcount) {
-    return failed(testname, "fgets_filesize() mismatch");
-  }
-
-  return passed(testname, "fgets_filesize()");
+  ASSERT_EQ(charcount, filecharcount) << "fgets_filesize() mismatch for "
+                                      << testname;
 }
 
 
@@ -392,25 +339,21 @@ bool fgets_filesize(const char *testname) {
  *   First create half a binary test file.
  *   Then re-open it for binary append, and add the other half.
  *   The intention is for testdata256 to contain 0, 1, 2... 253, 254, 255.
- * returns true if test passed
  */
 
-bool fopen_appendBinaryFile(const char *testname)
-{
+void fopen_appendBinaryFile(const char* testname) {
   // first half: create a small file
   // write 0..99
 
   FILE *f = fopen("testdata256", "wb");
-  if (NULL == f) {
-    return failed(testname, "failed on fopen()\n");
-  }
+  ASSERT_NE(nullptr, f) << "failed on fopen() for " << testname;
 
   for (int i = 0; i < 100; ++i) {
     unsigned char c = (unsigned char)i;
     size_t j = fwrite(&c, 1, 1, f);
     if (1 != j) {
       fclose(f);
-      return failed(testname, "can't fwrite(&c, 1, 1, f)");
+      ASSERT_TRUE(false) << "can't fwrite(&c, 1, 1, f) for " << testname;
     }
   }
   fclose(f);
@@ -419,21 +362,17 @@ bool fopen_appendBinaryFile(const char *testname)
   // write 99..255
 
   f = fopen("testdata256", "ab");
-  if (NULL == f) {
-    return failed(testname, "fopen() testdata256 (ab)");
-  }
+  ASSERT_NE(nullptr, f) << "fopen() testdata256 (ab) for " << testname;
 
   for (int i = 100; i < 256; ++i) {
     unsigned char c = (unsigned char)i;
     size_t j = fwrite(&c, 1, 1, f);
     if (1 != j) {
       fclose(f);
-      return failed(testname, "can't fwrite(&c, 1, 1, f)");
+      ASSERT_TRUE(false) << "can't fwrite(&c, 1, 1, f) for " << testname;
     }
   }
   fclose(f);
-
-  return passed(testname, "fopen_appendBinaryFile()");
 }
 
 
@@ -442,41 +381,33 @@ bool fopen_appendBinaryFile(const char *testname)
  *   First create a text file with first 2 lines.
  *   Then re-open it for append, and add the remaining lines.
  *   The intention is for testdata to contain gText[].
- * returns true if test passed
  */
 
-bool fopen_appendTextFile(const char *testname) {
-
+void fopen_appendTextFile(const char* testname) {
   // create & write first 2 lines of gText[]
 
   FILE *f = fopen("testdata.txt", "w");
   int i = 0;
-  if (NULL == f) {
-    return failed(testname, "fopen() testdata.txt (w+)");
-  }
+  ASSERT_NE(nullptr, f) << "fopen() testdata.txt (w+) for " << testname;
 
+  EXPECT_TRUE((gText[0]) && (gText[1])) << "gText table is too small! for "
+                                        << testname;
   if ((gText[0]) && (gText[1])) {
     // write first two lines
     fprintf(f, "%s", gText[i++]);
     fprintf(f, "%s", gText[i++]);
-  } else {
-    failed(testname, "gText table is too small!");
   }
   fclose(f);
 
   // re-open and append the rest of gText[]
 
   f = fopen("testdata.txt", "a");
-  if (NULL == f) {
-    return failed(testname, "fopen() testdata.txt (w+)");
-  }
+  ASSERT_NE(nullptr, f) << "fopen() testdata.txt (w+) for " << testname;
   while (gText[i]) {
     fprintf(f, "%s", gText[i]);
     i++;
   }
   fclose(f);
-
-  return passed(testname, "fopen_appendTextFile()");
 }
 
 
@@ -491,233 +422,120 @@ bool fopen_appendTextFile(const char *testname) {
  *   test1() before test2(), and so on.
  */
 
-bool test1()
-{
+void test1() {
   // test the creation of a binary file
-  return fopen_createBinaryFile("test1");
+  fopen_createBinaryFile("test1");
 }
 
-
-bool test2()
-{
-  // test the creation of a text file
-  return fopen_createTextFile("test2");
+void test2() {
+  fopen_createTextFile("test2");
 }
 
-
-bool test3()
-{
+void test3() {
   // test reading bytes from binary file
-  return fread_bytes("test3", "testdata256");
+  fread_bytes("test3", "testdata256");
 }
 
-
-bool test4()
-{
+void test4() {
   // test reading block from binary file
-  return fread_256x1_block("test4");
+  fread_256x1_block("test4");
 }
 
-
-bool test5()
-{
+void test5() {
   // test reading block from binary file
-  return fread_1x256_block("test5");
+  fread_1x256_block("test5");
 }
 
-
-bool test6()
-{
+void test6() {
   // test reading from text file
-  return fgets_readText("test6");
+  fgets_readText("test6");
 }
 
-
-bool test7()
-{
+void test7() {
   // test binary file size
-  return fseek_filesize256("test7");
+  fseek_filesize256("test7");
 }
 
-
-bool test8()
-{
+void test8() {
   // test text file size
-  return fgets_filesize("test8");
+  fgets_filesize("test8");
 }
 
-
-bool test9()
-{
+void test9() {
   // create binary file twice
-  bool ret = true;
-  ret &= fopen_createBinaryFile("test7a");
-  ret &= fopen_createBinaryFile("test7b");
-  return ret;
+  fopen_createBinaryFile("test7a");
+  fopen_createBinaryFile("test7b");
 }
 
-
-bool test10()
-{
+void test10() {
   // create text file twice
-  bool ret = true;
-  ret &= fopen_createTextFile("test8a");
-  ret &= fopen_createTextFile("test8b");
-  return ret;
+  fopen_createTextFile("test8a");
+  fopen_createTextFile("test8b");
 }
 
-
-bool test11()
-{
+void test11() {
   // verify binary file size again
-  return fseek_filesize256("test11");
+  fseek_filesize256("test11");
 }
 
-
-bool test12()
-{
+void test12() {
   // verify test file size again
-  return fgets_filesize("test12");
+  fgets_filesize("test12");
 }
 
-
-bool test13()
-{
+void test13() {
   // verify seeks followed by reads
-  return fseek_simple_testdata256("test13");
+  fseek_simple_testdata256("test13");
 }
 
-
-bool test14()
-{
+void test14() {
   // create and then append to binary file
   // then verify contents & filesize
-  bool ret = true;
-  ret &= fopen_appendBinaryFile("test14a");
-  ret &= fread_bytes("test14b", "testdata256");
-  ret &= fseek_filesize256("test14c");
-  return ret;
+  fopen_appendBinaryFile("test14a");
+  fread_bytes("test14b", "testdata256");
+  fseek_filesize256("test14c");
 }
 
-
-bool test15()
-{
+void test15() {
   // create and then append to a text file
   // then verify contents & filesize
-  bool ret = true;
-  ret &= fopen_appendTextFile("test15a");
-  ret &= fgets_readText("test15b");
-  ret &= fgets_filesize("test15c");
-  return ret;
+  fopen_appendTextFile("test15a");
+  fgets_readText("test15b");
+  fgets_filesize("test15c");
 }
 
-
-bool test16()
-{
+void test16() {
   // try a slightly different path
-  bool ret = true;
-  ret &= fread_bytes("test16", "./testdata256");
-  return ret;
+  fread_bytes("test16", "./testdata256");
 }
 
-
-bool test17()
-{
+void test17() {
   // try a slightly different path
-  bool ret = true;
-  ret &= fread_bytes("test17", ".././file/testdata256");
-  return ret;
+  fread_bytes("test17", ".././file/testdata256");
 }
 
-
-bool test18()
-{
-  bool ret = true;
-  ret &= fopen_fail("test18");
-  return ret;
+void test18() {
+  fopen_fail("test18");
 }
 
-
-/*
- * function testSuite()
- *
- *   Run through a complete sequence of file tests.
- *
- * returns true if all tests succeed.  false if one or more fail.
- */
-
-bool testSuite()
-{
-  bool ret = true;
+TEST_F(FileTests, Test) {
   // The order of executing these tests matters!
-  ret &= test1();
-  ret &= test2();
-  ret &= test3();
-  ret &= test4();
-  ret &= test5();
-  ret &= test6();
-  ret &= test7();
-  ret &= test8();
-  ret &= test9();
-  ret &= test10();
-  ret &= test11();
-  ret &= test12();
-  ret &= test13();
-  ret &= test14();
-  ret &= test15();
-  ret &= test16();
-  ret &= test17();
-  ret &= test18();
-  return ret;
-}
-
-
-/*
- * function remove_testfiles()
- *
- * cleanup and remove all testfiles here.
- * (at the moment, nacl cannot remove files, so this function
- * will do nothing in a nacl nexe.  It will function as expected
- * when the test suite is built as a non-nacl executable.  The
- * NaCl version of the test suite uses a python script to remove
- * the testfiles.)
- */
-
-void remove_testfiles()
-{
-#if !defined(__native_client__)
-  remove("testdata256");
-  remove("testdata.txt");
-#endif
-}
-
-
-/*
- * main entry point.
- *
- * run all tests and call system exit with appropriate value
- *   0 - success, all tests passed.
- *  -1 - one or more tests failed.
- */
-
-int main(const int argc, const char *argv[])
-{
-  bool passed;
-
-  // remove test files from previous runs
-  remove_testfiles();
-
-  // run the full test suite
-  passed = testSuite();
-
-  // remove test files that were created.
-  remove_testfiles();
-
-  if (passed) {
-    printf("All tests PASSED\n");
-    exit(0);
-  } else {
-    printf("One or more tests FAILED\n");
-    exit(-1);
-  }
+  test1();
+  test2();
+  test3();
+  test4();
+  test5();
+  test6();
+  test7();
+  test8();
+  test9();
+  test10();
+  test11();
+  test12();
+  test13();
+  test14();
+  test15();
+  test16();
+  test17();
+  test18();
 }
