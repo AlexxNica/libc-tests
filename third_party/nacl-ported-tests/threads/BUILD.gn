@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "mutex_leak.cc",
     # Enable this when it is compilable
@@ -14,6 +16,8 @@ source_set("small_tests") {
 }
 
 source_set("small_tests_broken") {
+  testonly = true
+
   sources = [
     "cond_timedwait.cc",
 
@@ -26,6 +30,8 @@ source_set("small_tests_broken") {
 }
 
 source_set("large_tests_broken") {
+  testonly = true
+
   sources = [
     "many_threads_sequential.cc",
   ]

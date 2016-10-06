@@ -5,6 +5,8 @@
 # TODO: add support to check output
 
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "dup_test.cc",
   ]

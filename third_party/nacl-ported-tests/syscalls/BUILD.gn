@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "getpid_test.cc",
     "semaphore_tests.cc",
@@ -14,6 +16,8 @@ source_set("small_tests") {
 }
 
 source_set("small_tests_broken") {
+  testonly = true
+
   sources = [
     "mem_test.cc",
   ]

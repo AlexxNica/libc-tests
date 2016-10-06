@@ -3,11 +3,12 @@
 # found in the LICENSE file.
 
 source_set("small_tests") {
-   sources = [
-     "vaarg.cc",
-   ]
-   deps = [
-     "//third_party/gtest",
-   ]
-}
+  testonly = true
 
+  sources = [
+    "vaarg.cc",
+  ]
+  deps = [
+    "//third_party/gtest",
+  ]
+}

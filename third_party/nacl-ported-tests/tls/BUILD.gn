@@ -44,6 +44,8 @@ defines_list = [
 ]
 
 source_set("small_tests") {
+  testonly = true
+
   deps = []
   foreach(casename_defines, defines_list) {
     case_name = casename_defines[0]
@@ -55,6 +57,8 @@ foreach(casename_defines, defines_list) {
   case_name = casename_defines[0]
   casename_defines -= [ case_name ]
   source_set("test_" + case_name) {
+    testonly = true
+
     cflags_cc = [
       "-DTEST_NAME=Tls" + case_name + "Tests",
       "-DTESTCASE_NAME=TestTls" + case_name,

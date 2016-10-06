@@ -2,6 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "inet.cc",
     "memcpy_move_set.cc",
@@ -16,6 +18,8 @@ source_set("small_tests") {
 }
 
 source_set("large_tests") {
+  testonly = true
+
   sources = [
     "malloc_realloc_calloc_free.cc",
   ]
@@ -25,6 +29,8 @@ source_set("large_tests") {
 }
 
 source_set("small_tests_broken") {
+  testonly = true
+
   sources = [
     "timezone.cc",
   ]

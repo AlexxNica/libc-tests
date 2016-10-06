@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "c_pow.cc",
     "cxx_pow.cc",

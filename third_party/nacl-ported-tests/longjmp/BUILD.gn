@@ -3,6 +3,8 @@
 # found in the LICENSE file.
 
 source_set("small_tests") {
+  testonly = true
+
   sources = [
     "longjmp.cc",
 
@@ -17,6 +19,8 @@ source_set("small_tests") {
 }
 
 source_set("slackslotstest") {
+  testonly = true
+
   cflags_cc = [ "-O1" ]
   if (is_debug) {
     configs -= [ "//build/config:debug" ]
