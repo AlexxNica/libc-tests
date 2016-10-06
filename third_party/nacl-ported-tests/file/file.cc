@@ -17,8 +17,18 @@ namespace {
 
 class FileTests : public ::testing::Test {
  protected:
+  const char* tmpDir = "/tmp/file_test";
 
   void SetUp() override {
+    if (mkdir(tmpDir, 0600) != 0) {
+      if (errno != EEXIST) {
+        FAIL() << "Error while creating tmp dir: " << tmpDir
+               << ", Error: " << errno;
+      }
+    }
+    if (chdir(tmpDir) != 0) {
+      FAIL() << "Not able to change dir to " << tmpDir;
+    };
     // Remove test files from previous run
     remove("testdata256");
     remove("testdata.txt");
@@ -27,6 +37,10 @@ class FileTests : public ::testing::Test {
   void TearDown() override {
     remove("testdata256");
     remove("testdata.txt");
+    if (chdir("..") != 0) {
+      FAIL() << "Not able to change dir to parent";
+    };
+    unlink(tmpDir);
   }
 };
 
@@ -511,7 +525,7 @@ void test16() {
 
 void test17() {
   // try a slightly different path
-  fread_bytes("test17", ".././file/testdata256");
+  fread_bytes("test17", ".././file_test/testdata256");
 }
 
 void test18() {
