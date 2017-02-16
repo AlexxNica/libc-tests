@@ -8,7 +8,6 @@ source_set("small_tests") {
   sources = [
     "getpid_test.cc",
     "semaphore_tests.cc",
-    "timefuncs_test.cc",
   ]
   deps = [
     "//third_party/gtest",
@@ -20,6 +19,7 @@ source_set("small_tests_broken") {
 
   sources = [
     "mem_test.cc",
+    "timefuncs_test.cc",
   ]
   deps = [
     "//third_party/gtest",
