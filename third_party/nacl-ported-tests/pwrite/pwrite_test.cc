@@ -15,8 +15,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-static char const *g_dirname = "/tmp/pwrite_test";
+#include "gtest/gtest.h"
 
+static char const* g_dirname = "/tmp/pwrite_test";
 
 /*
  * At least one test case bake in knowledge of relative sizes of these
@@ -65,48 +66,78 @@ static char const second_seq_write[] =
     "Not for the first time, an argument had broken out over breakfast at "
     "number four, Privet Drive.";
 
-struct TestCase {
-  char const *test_name;
-  int (*test_func)(int wr_fd, int rd_fd, void *test_specifics);
-  int wr_fd_open_flag;
-  void *test_specifics;
-};
-
-static void InitializeFile(char const *filename,
-                           struct TestCase const *test_case,
-                           int *wr_fd,
-                           int *rd_fd) {
-  FILE *iob = fopen(filename, "w");
+static void InitializeFile(std::string filename,
+                           int* wr_fd,
+                           int* rd_fd,
+                           int wr_fd_open_flag) {
+  FILE* iob = fopen(filename.c_str(), "w");
   size_t len = sizeof quote - 1;
 
-  if (NULL == iob) {
-    fprintf(stderr, "Could not open \"%s\" for initialization.\n", filename);
-    exit(1);
-  }
-
-  if (fwrite(quote, 1, len, iob) != len) {
-    fprintf(stderr, "Could not initialize contents of \"%s\".\n", filename);
-    exit(1);
-  }
-  if (fclose(iob)) {
-    fprintf(stderr, "Could not close \"%s\" post initialization.\n", filename);
-    exit(1);
-  }
-  *wr_fd = open(filename, test_case->wr_fd_open_flag, 0);
-  if (-1 == *wr_fd) {
-    fprintf(stderr, "Could not open \"%s\" for test write access\n", filename);
-    exit(1);
-  }
-  *rd_fd = open(filename, O_RDONLY, 0);
-  if (-1 == *rd_fd) {
-    fprintf(stderr, "Could not open \"%s\" for test read verfication access\n",
-            filename);
-    exit(1);
-  }
+  ASSERT_NE(nullptr, iob) << "Could not open " << filename
+                          << " for initialization.";
+  ASSERT_EQ(fwrite(quote, 1, len, iob), len)
+      << "Could not initialize contents of " << filename;
+  ASSERT_EQ(fclose(iob), 0)
+      << "Could not close " << filename << " post initialization";
+  *wr_fd = open(filename.c_str(), wr_fd_open_flag, 0);
+  ASSERT_NE(*wr_fd, -1) << "Could not open " << filename
+                        << " for test write access";
+  *rd_fd = open(filename.c_str(), O_RDONLY, 0);
+  ASSERT_NE(*rd_fd, -1) << "Could not open " << filename
+                        << " for test read verfication access";
 }
 
-static int VerifyContents(int rd_fd, char const *expected_data, size_t nbytes,
-                          off_t offset) {
+struct test_param {
+  int wr_fd_open_flag;
+  void* test_specifics;
+};
+
+class PwriteTests : public ::testing::TestWithParam<struct test_param> {
+ protected:
+  std::string test_file_name;
+  int wr_fd = -1, rd_fd = -1;
+  static int index;
+  const struct test_param* params;
+
+  void SetUp() override {
+    params = &GetParam();
+    test_file_name =
+        g_dirname + std::string("/absalom") + std::to_string(++index) + ".txt";
+    if (mkdir(g_dirname, 0600) != 0) {
+      if (errno != EEXIST) {
+        FAIL() << "Error while creating tmp dir: " << g_dirname
+               << ", Error: " << errno;
+      }
+    }
+    InitializeFile(test_file_name, &wr_fd, &rd_fd, params->wr_fd_open_flag);
+    if (HasFatalFailure()) {
+      FAIL();
+    }
+  }
+
+  void TearDown() override {
+    if (wr_fd != -1) {
+      close(wr_fd);
+    }
+    if (rd_fd != -1) {
+      close(rd_fd);
+    }
+    if (unlink(test_file_name.c_str()) != 0) {
+      FAIL() << "Could not remove test file: " << test_file_name;
+    }
+
+    if (rmdir(g_dirname) != 0) {
+      FAIL() << "Could not destroy test directory: " << g_dirname;
+    }
+  }
+};
+
+int PwriteTests::index = 0;
+
+static void VerifyContents(int rd_fd,
+                           char const* expected_data,
+                           size_t nbytes,
+                           off_t offset) {
   char buffer[4096];
   size_t chunk_size;
   ssize_t result;
@@ -117,74 +148,53 @@ static int VerifyContents(int rd_fd, char const *expected_data, size_t nbytes,
       chunk_size = sizeof buffer;
     }
     result = pread(rd_fd, buffer, chunk_size, offset);
-    if (result != chunk_size) {
-      fprintf(stderr,
-              "VerifyContents: pread failed, got %zd, errno %d, expected %zu\n",
-              result, errno, chunk_size);
-      return 0;
-    }
-    if (0 != memcmp(expected_data, buffer, chunk_size)) {
-      fprintf(stderr,
-              "VerifyContents: unexpected data starting at offset %llu\n"
-              "Got:\n%.*s\nExpected:\n%.*s\n",
-              offset,
-              chunk_size, buffer, chunk_size, expected_data);
-      return 0;
-    }
+    auto err = errno;
+    ASSERT_EQ(result, (ssize_t)chunk_size) << "VerifyContents: pread failed"
+                                           << ", errno " << err;
+    ASSERT_EQ(memcmp(expected_data, buffer, chunk_size), 0)
+        << "VerifyContents: unexpected data starting at offset " << offset <<
+        " Got: " << buffer << " Expected: " << expected_data;
     expected_data += chunk_size;
     nbytes -= chunk_size;
     offset += chunk_size;
   }
-  return 1;
 }
 
-static int PwriteObeysOffset(int wr_fd, int rd_fd, void *test_specifics) {
+class PwriteObeysOffsetTests : public PwriteTests {};
+
+TEST_P(PwriteObeysOffsetTests, PwriteObeysOffset) {
   char buffer[4096];
   ssize_t nbytes;
 
-  if (sizeof buffer < sizeof overwrite - 1) {
-    fprintf(stderr,
-            "PwriteObeysOffset: configuration error: buffer too small\n");
-    return 1;
-  }
-  if (lseek(wr_fd, 0, SEEK_END) == (off_t) -1) {
-    fprintf(stderr, "PwriteObeysOffset: seek to end before write failed\n");
-    return 1;
-  }
-  if (write(wr_fd, "Z", 1) != 1) {
-    fprintf(stderr, "PwriteObeysOffset: write at end failed\n");
-    return 1;
-  }
-  nbytes = pwrite(wr_fd, overwrite, sizeof overwrite - 1, (off_t) 0);
-  if (nbytes != sizeof overwrite - 1) {
-    fprintf(stderr,
-            "PwriteObeysOffset: pwrite to beginning failed,"
-            " expected %zu, got %zd\n",
-            sizeof overwrite - 1, nbytes);
-    return 1;
-  }
-  if (!VerifyContents(rd_fd, overwrite, sizeof overwrite - 1, 0)) {
-    fprintf(stderr,
-            "PwriteObeysOffset: expected overwritten data wrong\n");
-    return 1;
-  }
-  if (!VerifyContents(rd_fd, quote + sizeof overwrite - 1,
-                      sizeof quote - sizeof overwrite,
-                      sizeof overwrite - 1)) {
-    fprintf(stderr,
-            "PwriteObeysOffset: bytes should have been unchanged\n");
-    return 1;
-  }
-  if (!VerifyContents(rd_fd, "Z", 1, sizeof quote - 1)) {
-    fprintf(stderr,
-            "PwriteObeysOffset: trailing Z missing?!?\n");
-  }
+  static_assert(sizeof buffer >= sizeof overwrite - 1,
+                "configuration error: buffer too small");
 
-  return 0;
+  ASSERT_NE(lseek(wr_fd, 0, SEEK_END), (off_t)-1)
+      << "seek to end before write failed";
+  ASSERT_EQ(write(wr_fd, "Z", 1), 1) << "write at end failed";
+  nbytes = pwrite(wr_fd, overwrite, sizeof overwrite - 1, (off_t)0);
+  ASSERT_EQ(nbytes, (ssize_t)(sizeof overwrite - 1))
+      << "pwrite to beginning failed";
+  VerifyContents(rd_fd, overwrite, sizeof overwrite - 1, 0);
+  VerifyContents(rd_fd, quote + sizeof overwrite - 1,
+                 sizeof quote - sizeof overwrite, sizeof overwrite - 1);
+  VerifyContents(rd_fd, "Z", 1, sizeof quote - 1);
 }
 
-static int PwriteDoesNotAffectReadPos(int wr_fd, int rd_fd,
-                                      void *test_specifics) {
+struct test_param params1[] = {
+    {O_RDWR, NULL},
+    {O_WRONLY, NULL},
+    {O_RDWR | O_APPEND, NULL},
+    {O_WRONLY | O_APPEND, NULL},
+};
+
+INSTANTIATE_TEST_CASE_P(PwriteObeysOffset,
+                        PwriteObeysOffsetTests,
+                        ::testing::ValuesIn(params1));
+
+class PwriteDoesNotAffectReadPosTests : public PwriteTests {};
+
+TEST_P(PwriteDoesNotAffectReadPosTests, PwriteDoesNotAffectReadPos) {
   size_t const overwrite_overlap = 100;
   size_t read_count;
   char buffer[4096];
@@ -192,78 +202,44 @@ static int PwriteDoesNotAffectReadPos(int wr_fd, int rd_fd,
 
   read_count = ((sizeof overwrite - 1) - overwrite_overlap);
   nbytes = read(wr_fd, buffer, read_count);
-  if (nbytes != read_count) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: initial read to set file pos"
-            " failed, got %zd, errno %d\n", nbytes, errno);
-    return 1;
-  }
-  if (0 != memcmp(buffer, quote, read_count)) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: initial read result unexpected, got:\n"
-            "%.*s\nexpected:\n%.*s\n",
-            read_count, buffer, read_count, quote);
-    return 1;
-  }
-
+  auto err = errno;
+  ASSERT_EQ((size_t)nbytes, read_count) << "Pinitial read to set file pos"
+                                           " failed "
+                                        << " errno " << err;
+  ASSERT_EQ(memcmp(buffer, quote, read_count), 0)
+      << "Pinitial read result unexpected";
   nbytes = pwrite(wr_fd, overwrite, sizeof overwrite - 1, 0);
-  if (nbytes != sizeof overwrite - 1) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: pwrite failed, expected %zu,"
-            " got %zd\n", sizeof overwrite - 1, nbytes);
-    return 1;
-  }
+  ASSERT_EQ(nbytes, (ssize_t)(sizeof overwrite - 1)) << "Ppwrite failed";
   read_count = sizeof quote - 1 - read_count;
   nbytes = read(wr_fd, buffer, read_count);
-  if (nbytes != read_count) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: read after pwrite failed, got"
-            " %zd, errno %d; expected %zu\n",
-            nbytes, errno, read_count);
-    return 1;
-  }
-  if (0 != memcmp(overwrite + sizeof overwrite - 1 - overwrite_overlap,
-                  buffer, overwrite_overlap)) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: overwritten data did not show up.\n"
-            "Got:\n%.*s\nExpected:\n%.*s\n",
-            overwrite_overlap,
-            buffer,
-            overwrite_overlap,
-            overwrite + sizeof overwrite - 1 - overwrite_overlap);
-    return 1;
-  }
-  if (0 != memcmp(buffer + overwrite_overlap,
-                  quote + sizeof overwrite - 1,
-                  read_count - overwrite_overlap)) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectReadPos: data beyond overwritten changed.\n"
-            "Got:\n%.*s\nExpected:\n%.*s\n",
-            read_count - overwrite_overlap,
-            buffer + overwrite_overlap,
-            read_count - overwrite_overlap,
-            quote + sizeof overwrite - 1);
-    return 1;
-  }
-  if (!VerifyContents(rd_fd,
-                      overwrite, sizeof overwrite - 1,
-                      0)) {
-    fprintf(stderr, "PwriteDoesNotAffectReadPos: overwritten data bad\n");
-    return 1;
-  }
-  if (!VerifyContents(rd_fd,
-                      quote + sizeof overwrite - 1,
-                      sizeof quote - sizeof overwrite,
-                      sizeof overwrite - 1)) {
-    fprintf(stderr, "PwriteDoesNotAffectReadPos: non-overwritten data bad\n");
-    return 1;
-  }
-
-  return 0;
+  err = errno;
+  ASSERT_EQ(nbytes, (ssize_t)read_count) << "Pread after pwrite failed,"
+                                         << " errno " << err;
+  ASSERT_EQ(memcmp(overwrite + sizeof overwrite - 1 - overwrite_overlap, buffer,
+                   overwrite_overlap),
+            0)
+      << "Poverwritten data did not show up.";
+  ASSERT_EQ(memcmp(buffer + overwrite_overlap, quote + sizeof overwrite - 1,
+                   read_count - overwrite_overlap),
+            0)
+      << "Pdata beyond overwritten changed.";
+  VerifyContents(rd_fd, overwrite, sizeof overwrite - 1, 0);
+  VerifyContents(rd_fd, quote + sizeof overwrite - 1,
+                 sizeof quote - sizeof overwrite, sizeof overwrite - 1);
 }
 
-static int PwriteDoesNotAffectWritePos(int wr_fd, int rd_fd,
-                                       void *test_specifics) {
+struct test_param params2[] = {
+    {O_RDWR, NULL},
+    {O_RDWR | O_APPEND, NULL},
+};
+
+INSTANTIATE_TEST_CASE_P(PwriteDoesNotAffectReadPos,
+                        PwriteDoesNotAffectReadPosTests,
+                        ::testing::ValuesIn(params2));
+
+class PwriteDoesNotAffectWritePosTests : public PwriteTests {};
+
+TEST_P(PwriteDoesNotAffectWritePosTests, PwriteDoesNotAffectWritePos) {
   /*
    * Write first_seq_write to file, overwriting initial contents.
    * Next, pwrite to some a non-overlapping location (end of file).
@@ -272,271 +248,88 @@ static int PwriteDoesNotAffectWritePos(int wr_fd, int rd_fd,
    */
   ssize_t result;
   size_t seq_bytes;
-  int expect_append = (int) test_specifics;
+  int expect_append = (int)(intptr_t)params->test_specifics;
 
   result = write(wr_fd, first_seq_write, sizeof first_seq_write - 1);
-
-  if (result != sizeof first_seq_write - 1) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectWritePos: writing first_seq_write failed:"
-            " got %zd, errno %d, expected %zu\n",
-            result, errno, sizeof first_seq_write - 1);
-    return 1;
-  }
+  auto err = errno;
+  ASSERT_EQ(result, (ssize_t)(sizeof first_seq_write - 1))
+      << "writing first_seq_write failed: "
+      << " errno " << err;
   result = pwrite(wr_fd, overwrite, sizeof overwrite - 1, sizeof quote - 1);
-  if (result != sizeof overwrite - 1) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectWritePos: pwriting overwrite failed:"
-            " got %zd, errno %d, expected %zu\n",
-            result, errno, sizeof overwrite - 1);
-    return 1;
-  }
+  err = errno;
+  ASSERT_EQ(result, (ssize_t)(sizeof overwrite - 1))
+      << "pwriting overwrite failed:"
+      << " errno " << err;
   result = write(wr_fd, second_seq_write, sizeof second_seq_write - 1);
-  if (result != sizeof second_seq_write - 1) {
-    fprintf(stderr,
-            "PwriteDoesNotAffectWritePos: writing second_seq_write failed:"
-            " got %zd, errno %d, expected %zu\n",
-            result, errno, sizeof second_seq_write - 1);
-    return 1;
-  }
+  err = errno;
+  ASSERT_EQ(result, (ssize_t)(sizeof second_seq_write - 1))
+      << "writing second_seq_write failed:"
+      << " errno " << err;
   if (expect_append) {
-    if (!VerifyContents(rd_fd, quote, sizeof quote - 1, 0)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: original data overwritten?!?\n");
-      return 1;
-    }
-    if (!VerifyContents(rd_fd, overwrite,
-                        sizeof overwrite - 1,
-                        sizeof quote - 1)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: pwrite content clobbered?\n");
-      return 1;
-    }
-    if (!VerifyContents(rd_fd, second_seq_write,
-                        sizeof second_seq_write - 1,
-                        sizeof quote - 1 + sizeof overwrite - 1)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: second_seq_write content"
-              " clobbered?\n");
-      return 1;
-    }
+    VerifyContents(rd_fd, quote, sizeof quote - 1, 0);
+    VerifyContents(rd_fd, overwrite, sizeof overwrite - 1, sizeof quote - 1);
+    VerifyContents(rd_fd, second_seq_write, sizeof second_seq_write - 1,
+                   sizeof quote - 1 + sizeof overwrite - 1);
   } else {
-    if (!VerifyContents(rd_fd, first_seq_write, sizeof first_seq_write - 1,
-                        0)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: first_seq_write data clobbered!\n");
-      return 1;
-    }
-    if (!VerifyContents(rd_fd, second_seq_write, sizeof second_seq_write - 1,
-                        sizeof first_seq_write - 1)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: second_seq_write data"
-              " clobbered!\n");
-      return 1;
-    }
+    VerifyContents(rd_fd, first_seq_write, sizeof first_seq_write - 1, 0);
+    VerifyContents(rd_fd, second_seq_write, sizeof second_seq_write - 1,
+                   sizeof first_seq_write - 1);
     seq_bytes = sizeof first_seq_write - 1 + sizeof second_seq_write - 1;
-    if (!VerifyContents(rd_fd,
-                        quote + seq_bytes,
-                        sizeof quote - 1 - seq_bytes,
-                        seq_bytes)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: original quote data clobbered!\n");
-      return 1;
-    }
-    if (!VerifyContents(rd_fd, overwrite, sizeof overwrite - 1,
-                        sizeof quote - 1)) {
-      fprintf(stderr,
-              "PwriteDoesNotAffectWritePos: pwrite data clobbered!\n");
-      return 1;
-    }
+    VerifyContents(rd_fd, quote + seq_bytes, sizeof quote - 1 - seq_bytes,
+                   seq_bytes);
+    VerifyContents(rd_fd, overwrite, sizeof overwrite - 1, sizeof quote - 1);
   }
-  return 0;
 }
 
-static int PreadObeysOffsetAndDoesNotAffectReadPtr(int wr_fd, int rd_fd,
-                                                   void *test_specifics) {
+struct test_param params3[] = {
+    {O_RDWR, NULL},
+    {O_WRONLY, NULL},
+    {O_RDWR | O_APPEND, (void*)1},
+    {O_WRONLY | O_APPEND, (void*)1},
+};
+
+INSTANTIATE_TEST_CASE_P(PwriteDoesNotAffectWritePos,
+                        PwriteDoesNotAffectWritePosTests,
+                        ::testing::ValuesIn(params3));
+
+class PreadObeysOffsetAndDoesNotAffectReadPtrTests : public PwriteTests {};
+
+TEST_P(PreadObeysOffsetAndDoesNotAffectReadPtrTests,
+       PreadObeysOffsetAndDoesNotAffectReadPtr) {
   ssize_t io_rv;
   static size_t const kFirstReadBytes = 128;
   static off_t const kPreadOffset = 256;
   static size_t const kPreadBytes = 128;
   char buffer[4096];
 
-  assert(kFirstReadBytes <= sizeof buffer);
-  assert(kFirstReadBytes <= sizeof quote - 1);
+  static_assert(kFirstReadBytes <= sizeof buffer, "");
+  static_assert(kFirstReadBytes <= sizeof quote - 1, "");
   io_rv = read(wr_fd, buffer, kFirstReadBytes);
-  if (io_rv != kFirstReadBytes) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr: first read failed\n");
-    return 1;
-  }
-  if (0 != memcmp(buffer, quote, kFirstReadBytes)) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr: first read contents bad\n"
-            "Got:\n"
-            "%.*s\n"
-            "Expected:\n"
-            "%.*s\n",
-            (int) io_rv, buffer,
-            (int) kFirstReadBytes, quote);
-    return 1;
-  }
-  assert(kPreadBytes <= sizeof buffer);
+  ASSERT_EQ(io_rv, (ssize_t)kFirstReadBytes) << "first read failed";
+  ASSERT_EQ(memcmp(buffer, quote, kFirstReadBytes), 0)
+      << "first read contents bad";
+  static_assert(kPreadBytes <= sizeof buffer, "");
   io_rv = pread(wr_fd, buffer, kPreadBytes, kPreadOffset);
-  if (io_rv != kPreadBytes) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr:"
-            " pread returned %d, errno %d, expected %d\n",
-            (int) io_rv, errno, (int) kPreadBytes);
-    return 1;
-  }
-  if (0 != memcmp(buffer, quote + kPreadOffset, kPreadBytes)) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr: pread content bad\n"
-            "Got:\n"
-            "%.*s\n"
-            "Expected:\n"
-            "%.*s\n",
-            (int) io_rv, buffer,
-            (int) kPreadBytes, quote + kPreadOffset);
-    return 1;
-  }
-  assert(sizeof quote - 1 - kFirstReadBytes <= sizeof buffer);
+  auto err = errno;
+  ASSERT_EQ(io_rv, (ssize_t)kPreadBytes) << "errno " << err;
+  ASSERT_EQ(memcmp(buffer, quote + kPreadOffset, kPreadBytes), 0)
+      << "pread content bad";
+  static_assert(sizeof quote - 1 - kFirstReadBytes <= sizeof buffer, "");
   io_rv = read(wr_fd, buffer, sizeof buffer);
-  if (io_rv != sizeof quote - 1 - kFirstReadBytes) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr:"
-            " bad byte count on 2nd read\n");
-    return 1;
-  }
-  if (0 != memcmp(buffer, quote + kFirstReadBytes,
-                  sizeof quote - 1 - kFirstReadBytes)) {
-    fprintf(stderr,
-            "PreadObeysOffsetAndDoesNotAffectReadPtr: 2nd read contents bad\n"
-            "Got:\n"
-            "%.*s\n"
-            "Expected:\n"
-            "%.*s\n",
-            (int) io_rv, buffer,
-            (int) sizeof quote - 1 - kFirstReadBytes, quote + kFirstReadBytes);
-    return 1;
-  }
-  return 0;
+  ASSERT_EQ(io_rv, (ssize_t)(sizeof quote - 1 - kFirstReadBytes))
+      << " bad byte count on 2nd read";
+  ASSERT_EQ(memcmp(buffer, quote + kFirstReadBytes,
+                   sizeof quote - 1 - kFirstReadBytes),
+            0)
+      << "2nd read contents bad";
 }
 
-static struct TestCase const g_test_cases[] = {
-  {
-    "Pwrite obeys offset, O_RDWR",
-    PwriteObeysOffset,
-    O_RDWR,
-    (void *) NULL
-  }, {
-    "Pwrite obeys offset, O_WRONLY",
-    PwriteObeysOffset,
-    O_WRONLY,
-    (void *) NULL
-  }, {
-    "Pwrite obeys offset, O_RDWR | O_APPEND",
-    PwriteObeysOffset,
-    O_RDWR | O_APPEND,
-    (void *) NULL
-  }, {
-    "Pwrite obeys offset, O_WRONLY | O_APPEND",
-    PwriteObeysOffset,
-    O_WRONLY | O_APPEND,
-    (void *) NULL
-  }, {
-    "Pwrite does not affect shared file pos (read), O_RDWR",
-    PwriteDoesNotAffectReadPos,
-    O_RDWR,
-    (void *) NULL
-  }, {
-    "Pwrite does not affect shared file pos (read), O_RDWR | O_APPEND",
-    PwriteDoesNotAffectReadPos,
-    O_RDWR | O_APPEND,
-    (void *) NULL
-  }, {
-    "Pwrite does not affect shared file pos (write), O_RDWR",
-    PwriteDoesNotAffectWritePos,
-    O_RDWR,
-    (void *) NULL
-  }, {
-    "Pwrite does not affect shared file pos (write), O_WRONLY",
-    PwriteDoesNotAffectWritePos,
-    O_WRONLY,
-    (void *) NULL
-  }, {
-    "Pwrite does not affect shared file pos (write), O_RDWR | O_APPEND",
-    PwriteDoesNotAffectWritePos,
-    O_RDWR | O_APPEND,
-    (void *) 1
-  }, {
-    "Pwrite does not affect shared file pos (write), O_WRONLY | O_APPEND",
-    PwriteDoesNotAffectWritePos,
-    O_WRONLY | O_APPEND,
-    (void *) 1
-  }, {
-    "PreadObeysOffsetAndDoesNotAffectReadPtr, O_RDONLY",
-    PreadObeysOffsetAndDoesNotAffectReadPtr,
-    O_RDONLY,
-    (void *) NULL
-  }, {
-    "PreadObeysOffsetAndDoesNotAffectReadPtr, O_RDWR",
-    PreadObeysOffsetAndDoesNotAffectReadPtr,
-    O_RDWR,
-    (void *) NULL
-  }, {
-    "PreadObeysOffsetAndDoesNotAffectReadPtr, O_RDWR | O_APPEND",
-    PreadObeysOffsetAndDoesNotAffectReadPtr,
-    O_RDWR | O_APPEND,
-    (void *) NULL
-  },
+struct test_param params4[] = {
+    {O_RDONLY, NULL},
+    {O_RDWR, NULL},
+    {O_RDWR | O_APPEND, NULL},
 };
 
-int main(int ac, char **av) {
-  int opt;
-  char test_file_name[PATH_MAX];
-  size_t ix;
-  int error_occurred = 0;
-  int wr_fd;
-  int rd_fd;
-
-  while (-1 != (opt = getopt(ac, av, "t:"))) {
-    switch (opt) {
-      case 't':
-        g_dirname = optarg;
-        break;
-      default:
-        fprintf(stderr, "Usage: pwrite_test [-t temp_dir]\n");
-        return 1;
-    }
-  }
-  for (ix = 0; ix < sizeof g_test_cases / sizeof g_test_cases[0]; ++ix) {
-    printf("%s\n", g_test_cases[ix].test_name);
-    snprintf(test_file_name, sizeof test_file_name,
-             "%s/absalom%zu.txt", g_dirname, ix);
-    /*
-     * For the case of pwrite() with O_APPEND, SFI NaCl tries to match
-     * the POSIX/Mac behaviour, which differs from Linux's behaviour.
-     * SFI NaCl contains a workaround to implement the POSIX/Mac
-     * behaviour on Linux.  Non-SFI NaCl currently does not implement
-     * this workaround, so the tests for POSIX/Mac behaviour don't
-     * pass.
-     */
-    if (NONSFI_MODE && (g_test_cases[ix].wr_fd_open_flag & O_APPEND)) {
-      printf("Skipped\n");
-      continue;
-    }
-    InitializeFile(test_file_name, &g_test_cases[ix], &wr_fd, &rd_fd);
-    if ((*g_test_cases[ix].test_func)(wr_fd, rd_fd,
-                                      g_test_cases[ix].test_specifics)) {
-      printf("Failed test %zu: %s\n", ix, g_test_cases[ix].test_name);
-      error_occurred = 1;
-    } else {
-      printf("OK\n");
-    }
-    (void) close(wr_fd);
-    (void) close(rd_fd);
-  }
-  printf("%s\n", error_occurred ? "FAILED" : "PASSED");
-  return error_occurred;
-}
+INSTANTIATE_TEST_CASE_P(PreadObeysOffsetAndDoesNotAffectReadPtr,
+                        PreadObeysOffsetAndDoesNotAffectReadPtrTests,
+                        ::testing::ValuesIn(params4));
