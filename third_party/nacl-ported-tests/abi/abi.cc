@@ -103,7 +103,7 @@ TEST_F(AbiTests, CheckSizes) {
   CHECK_SIZEOF(struct stat, 144);
   CHECK_SIZEOF(struct dirent, 280);
 
-  CHECK_SIZEOF(jmp_buf, 200);
+  CHECK_SIZEOF(jmp_buf, 208);
 }
 
 
