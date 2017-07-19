@@ -8,11 +8,9 @@
 #include <string.h>
 
 const char *testdata_dir;
-const char *base_dir;
 
 int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
-  base_dir = dirname(argv[0]);
-  testdata_dir = strcat((char *)base_dir, "/testdata");
+  testdata_dir = "/system/data/testdata";
   return RUN_ALL_TESTS();
 }
