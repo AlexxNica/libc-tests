@@ -37,6 +37,6 @@ TEST_F(SleepTests, TestSleep) {
   unsigned int unslept = sleep(1);
   end = time(NULL);
   time_t elapsed_time = (end - start);
-  EXPECT_EQ(elapsed_time, 1); // Should have slept for 1 sec
+  EXPECT_GE(elapsed_time, 1); // Should have slept for at least 1 sec
   EXPECT_EQ(unslept, 0u);
 }
