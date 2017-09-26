@@ -11,22 +11,22 @@ executable("tests") {
     "main.cc",
   ]
   deps = [
-    "//libc-tests/third_party/nacl-ported-tests/abi:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/bigalloc:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/dup:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/dynamic_linking:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/libc:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/longjmp:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/math:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/nanosleep:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/pwrite:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/redir:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/sleep:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/stdargs:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/syscalls:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/threads:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/tls:small_tests",
     "//third_party/gtest",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/abi:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/bigalloc:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/dup:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/dynamic_linking:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/libc:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/longjmp:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/math:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/nanosleep:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/pwrite:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/redir:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/sleep:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/stdargs:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/syscalls:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/threads:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/tls:small_tests",
   ]
 }
 
@@ -36,13 +36,13 @@ executable("libc-tests-broken") {
     "main.cc",
   ]
   deps = [
-    "//libc-tests/third_party/nacl-ported-tests/fdopen_test:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/file:small_tests",
-    "//libc-tests/third_party/nacl-ported-tests/libc:small_tests_broken",
-    "//libc-tests/third_party/nacl-ported-tests/syscalls:small_tests_broken",
-    "//libc-tests/third_party/nacl-ported-tests/threads:large_tests_broken",
-    "//libc-tests/third_party/nacl-ported-tests/threads:small_tests_broken",
     "//third_party/gtest",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/fdopen_test:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/file:small_tests",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/libc:small_tests_broken",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/syscalls:small_tests_broken",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/threads:large_tests_broken",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/threads:small_tests_broken",
   ]
 }
 
@@ -52,8 +52,8 @@ executable("libc-large-tests") {
     "main.cc",
   ]
   deps = [
-    "//libc-tests/third_party/nacl-ported-tests/libc:large_tests",
     "//third_party/gtest",
+    "//third_party/libc-tests/third_party/nacl-ported-tests/libc:large_tests",
   ]
 }
 
