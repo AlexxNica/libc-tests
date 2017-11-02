@@ -59,6 +59,7 @@ executable("libc-large-tests") {
 
 package("libc-tests") {
   testonly = true
+  system_image = true
 
   deps = [
     ":libc-large-tests",
